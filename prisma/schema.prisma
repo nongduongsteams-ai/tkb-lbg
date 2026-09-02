@@ -1,0 +1,242 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Dùng cho Neon serverless
+}
+
+// ═══════════════════════════════════════════════════════
+// 1. USERS — Quản lý người dùng & phân quyền
+// ═══════════════════════════════════════════════════════
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  dob          DateTime?
+  gender       Gender?
+  role         Role     @default(GV)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  homeroomClasses Class[]           @relation("HomeroomTeacher")
+  assignments     Assignment[]
+  sessions        Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// ═══════════════════════════════════════════════════════
+// 2. SCHOOL_PLAN — Khung kế hoạch giáo dục (KHGD)
+//    Đây là "chuẩn định mức" để đối chiếu Xanh/Đỏ/Vàng
+// ═══════════════════════════════════════════════════════
+model SchoolPlan {
+  id                 String  @id @default(cuid())
+  schoolYear         String  @map("school_year") // "2025-2026"
+  grade              Int     // 6, 7, 8, 9
+  subjectName        String  @map("subject_name")
+  // Tiết/tuần
+  periodsPerWeekHk1  Float   @map("periods_per_week_hk1")
+  periodsPerWeekHk2  Float   @map("periods_per_week_hk2")
+  // Tổng tiết cả kỳ/năm
+  totalHk1           Int     @map("total_hk1")
+  totalHk2           Int     @map("total_hk2")
+  totalYear          Int     @map("total_year")
+  note               String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([schoolYear, grade, subjectName])
+  @@map("school_plans")
+}
+
+// ═══════════════════════════════════════════════════════
+// 3. SUBJECTS — Môn học (hỗ trợ môn tích hợp parent/child)
+//    Ví dụ: KHTN (parent=null) → Lý, Hóa, Sinh (parent=KHTN)
+// ═══════════════════════════════════════════════════════
+model Subject {
+  id              String   @id @default(cuid())
+  name            String
+  grade           Int
+  color           String   @default("#6366f1") // Màu hiển thị trên TKB
+  parentSubjectId String?  @map("parent_subject_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Self-relation: môn tích hợp
+  parentSubject Subject?  @relation("SubjectChildren", fields: [parentSubjectId], references: [id])
+  childSubjects Subject[] @relation("SubjectChildren")
+
+  // Relations
+  curriculums Curriculum[]
+  assignments Assignment[]
+
+  @@unique([name, grade])
+  @@map("subjects")
+}
+
+// ═══════════════════════════════════════════════════════
+// 4. CLASSES — Lớp học
+// ═══════════════════════════════════════════════════════
+model Class {
+  id                String   @id @default(cuid())
+  name              String   // "6A", "7B"...
+  grade             Int
+  schoolYear        String   @map("school_year")
+  homeroomTeacherId String?  @map("homeroom_teacher_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  homeroomTeacher User?        @relation("HomeroomTeacher", fields: [homeroomTeacherId], references: [id])
+  curriculums     Curriculum[]
+  assignments     Assignment[]
+
+  @@unique([name, schoolYear])
+  @@map("classes")
+}
+
+// ═══════════════════════════════════════════════════════
+// 5. CURRICULUM — Phân phối chương trình (PPCT)
+//    Mỗi record = 1 tiết dạy trong kế hoạch năm học
+// ═══════════════════════════════════════════════════════
+model Curriculum {
+  id           String  @id @default(cuid())
+  subjectId    String  @map("subject_id")
+  classId      String  @map("class_id")
+  weekNumber   Int     @map("week_number")    // Tuần thứ mấy trong năm học
+  lessonNumber Int     @map("lesson_number")   // Tiết PPCT (tuyến tính: 1,2,3...)
+  lessonName   String  @map("lesson_name")     // Tên bài dạy
+  note         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  subject             Subject           @relation(fields: [subjectId], references: [id])
+  class               Class             @relation(fields: [classId], references: [id])
+  teachingSchedules   TeachingSchedule[]
+
+  @@unique([subjectId, classId, lessonNumber])
+  @@map("curriculums")
+}
+
+// ═══════════════════════════════════════════════════════
+// 6. ASSIGNMENTS — Phân công chuyên môn
+//    GV A → Dạy môn B → Lớp C
+// ═══════════════════════════════════════════════════════
+model Assignment {
+  id         String   @id @default(cuid())
+  teacherId  String   @map("teacher_id")
+  subjectId  String   @map("subject_id")
+  classId    String   @map("class_id")
+  roleNote   String?  @map("role_note")  // "TTCM KHTN", "Quản trị mạng"...
+  schoolYear String   @map("school_year")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  teacher         User              @relation(fields: [teacherId], references: [id])
+  subject         Subject           @relation(fields: [subjectId], references: [id])
+  class           Class             @relation(fields: [classId], references: [id])
+  timetableSlots  TimetableSlot[]
+
+  @@unique([teacherId, subjectId, classId, schoolYear])
+  @@map("assignments")
+}
+
+// ═══════════════════════════════════════════════════════
+// 7. TIMETABLE_SLOTS — Thời khóa biểu
+//    1 record = 1 ô trong lưới TKB (Thứ × Tiết × Tuần)
+// ═══════════════════════════════════════════════════════
+model TimetableSlot {
+  id           String        @id @default(cuid())
+  assignmentId String        @map("assignment_id")
+  weekNumber   Int           @map("week_number")   // Tuần học
+  dayOfWeek    Int           @map("day_of_week")   // 2=Thứ 2, 3=Thứ 3 ... 7=Thứ 7
+  period       Int           // Tiết: 1-5
+  session      Session_Type  // sang | chieu
+  status       SlotStatus    @default(NORMAL)
+  schoolYear   String        @map("school_year")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  assignment        Assignment         @relation(fields: [assignmentId], references: [id])
+  teachingSchedules TeachingSchedule[]
+
+  // Không cho phép 1 GV dạy 2 nơi cùng lúc (validate ở application layer)
+  @@index([weekNumber, dayOfWeek, period, session])
+  @@map("timetable_slots")
+}
+
+// ═══════════════════════════════════════════════════════
+// 8. TEACHING_SCHEDULES — Lịch Báo Giảng (LBG)
+//    Kết quả cuối: TKB + PPCT → LBG cho từng GV
+// ═══════════════════════════════════════════════════════
+model TeachingSchedule {
+  id               String         @id @default(cuid())
+  timetableSlotId  String         @map("timetable_slot_id")
+  curriculumId     String?        @map("curriculum_id")    // null nếu dùng "đôn tiết tự động"
+  weekNumber       Int            @map("week_number")
+  date             DateTime       // Ngày dạy cụ thể
+  actualLessonNum  Int            @map("actual_lesson_num")
+  actualLessonName String         @map("actual_lesson_name")
+  status           ScheduleStatus @default(NORMAL)
+  preparation      String?        // "Máy chiếu", "Phòng máy"...
+  isPublished      Boolean        @default(false) @map("is_published")
+  publishedAt      DateTime?      @map("published_at")
+  note             String?
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  timetableSlot TimetableSlot @relation(fields: [timetableSlotId], references: [id])
+  curriculum    Curriculum?   @relation(fields: [curriculumId], references: [id])
+
+  @@map("teaching_schedules")
+}
+
+// ═══════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════
+enum Role {
+  ADMIN
+  BGH
+  GV
+}
+
+enum Gender {
+  NAM
+  NU
+}
+
+enum Session_Type {
+  SANG
+  CHIEU
+}
+
+enum SlotStatus {
+  NORMAL      // Tiết dạy bình thường
+  SUBSTITUTE  // Dạy thay (lấp giờ)
+  CANCELLED   // Tiết bị hủy
+}
+
+enum ScheduleStatus {
+  NORMAL      // Bình thường
+  SUBSTITUTE  // Dạy thay
+  MAKEUP      // Dạy bù
+}
