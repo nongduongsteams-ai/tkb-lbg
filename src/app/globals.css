@@ -120,3 +120,56 @@ body::before {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.03); }
 }
+
+
+/* ═══════════════════════════════════════════════════════
+   PRINT STYLES (A4 BLACK & WHITE, NO WATERMARK)
+════════════════════════════════════════════════════════ */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 1cm;
+  }
+  
+  /* Ẩn các thành phần giao diện không cần in */
+  nav, header, footer, button, .sidebar, .topbar, .no-print, [role="navigation"], [role="dialog"], [role="menu"] {
+    display: none !important;
+  }
+  
+  /* Reset nền và buộc đen trắng */
+  body, html, main, .linear-card {
+    background: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  
+  /* Đảm bảo bảng hiển thị đủ trang và nét viền */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  td, th {
+    border: 1px solid #000 !important;
+    color: black !important;
+    background: transparent !important;
+  }
+  
+  /* Chuyển tất cả chữ thành màu đen */
+  * {
+    color: black !important;
+    text-shadow: none !important;
+  }
+  
+  /* Ẩn Watermark */
+  .watermark-text {
+    display: none !important;
+  }
+}

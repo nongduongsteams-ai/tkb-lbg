@@ -1267,13 +1267,13 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
                                 style={{ top: `${(visiblePeriods.length / 2) * 100}%`, transform: 'translateY(-50%)', userSelect: 'none' }}
                               >
                                 <div 
-                                  className="text-[56px] font-black leading-none tracking-tighter"
+                                  className="watermark-text text-[56px] font-black leading-none tracking-tighter"
                                   style={{ color: colors.watermark }}
                                 >
                                   {cls.name}
                                 </div>
                                 <div 
-                                  className="text-[16px] font-black uppercase tracking-tight mt-1 whitespace-nowrap"
+                                  className="watermark-text text-[16px] font-black uppercase tracking-tight mt-1 whitespace-nowrap"
                                   style={{ color: colors.watermark }}
                                 >
                                   {dayName} - {session === 'SANG' ? 'SÁNG' : 'CHIỀU'}
