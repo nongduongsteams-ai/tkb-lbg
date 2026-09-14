@@ -278,7 +278,7 @@ export async function getDashboardStats(weekNumber: number, schoolYear: string, 
     }
   }
 
-  const validSlots = allSlots.filter(s => !overriddenSlotIds.has(s.id));
+  const validSlots = allSlots.filter(s => !overriddenSlotIds.has(s.id) && s.status !== 'CANCELLED');
 
   const stats = [];
   
@@ -286,8 +286,11 @@ export async function getDashboardStats(weekNumber: number, schoolYear: string, 
     const assignments = allAssignments.filter(a => a.classId === cls.id);
     const clsSlots = validSlots.filter(s => s.assignment.classId === cls.id);
 
-    const subjectsList = assignments.map((a) => {
-        const subjectSlots = clsSlots.filter(s => s.assignmentId === a.id);
+    const uniqueSubjects = Array.from(new Map(assignments.map(a => [a.subjectId, a.subject])).values());
+
+    const subjectsList = uniqueSubjects.map((subject) => {
+        const subjectAssignmentIds = new Set(assignments.filter(a => a.subjectId === subject.id).map(a => a.id));
+        const subjectSlots = clsSlots.filter(s => subjectAssignmentIds.has(s.assignmentId));
         const scheduledWeek = subjectSlots.filter(s => s.weekNumber === weekNumber).length;
         const scheduledHk1 = subjectSlots.filter(s => s.weekNumber <= 18 && s.weekNumber <= weekNumber).length;
         const scheduledHk2 = subjectSlots.filter(s => s.weekNumber > 18 && s.weekNumber <= weekNumber).length;
@@ -300,7 +303,7 @@ export async function getDashboardStats(weekNumber: number, schoolYear: string, 
 
         // Fetch from memory
         const weeklyPlans = allWeeklyPlans.filter(
-          wp => wp.grade === cls.grade && wp.subjectName === a.subject.name
+          wp => wp.grade === cls.grade && wp.subjectName === subject.name
         );
         
         let hasWeeklyPlan = false;
@@ -329,7 +332,7 @@ export async function getDashboardStats(weekNumber: number, schoolYear: string, 
         
         // Fetch from memory
         const globalPlan = allGlobalPlans.find(
-          gp => gp.grade === cls.grade && gp.subjectName === a.subject.name
+          gp => gp.grade === cls.grade && gp.subjectName === subject.name
         );
         
         if (!hasWeeklyPlan && globalPlan) {
@@ -346,7 +349,7 @@ export async function getDashboardStats(weekNumber: number, schoolYear: string, 
         const duplicateLessonNums = Array.from(new Set(lessonNums.filter((item: number, index: number) => lessonNums.indexOf(item) !== index)));
 
         return {
-          subjectName: a.subject.name,
+          subjectName: subject.name,
           scheduledWeek,
           planWeek,
           scheduledHk1,
@@ -443,7 +446,7 @@ export async function updateTeachingSchedule(
     // 3. Tra c\u1ee9u PPCT theo s\u1ed1 ti\u1ebft m\u1edbi (\u0111\u1ec3 t\u1ef1 \u0111i\u1ec1n t\u00ean b\u00e0i)
     const curriculum = await prisma.curriculum.findFirst({
       where: {
-        subjectId: assignment.subjectId,
+        subject: { name: assignment.subject.name },
         grade: assignment.class.grade,
         lessonNumber: newLessonNum,
       }
@@ -474,7 +477,7 @@ export async function updateTeachingSchedule(
     if (autoLessonNum && isOverride) {
       const fromCurriculum = await prisma.curriculum.findFirst({
         where: {
-          subjectId: assignment.subjectId,
+          subject: { name: assignment.subject.name },
           grade: assignment.class.grade,
           lessonNumber: schedule.actualLessonNum,
         }
@@ -601,7 +604,7 @@ export async function resetLessonOverride(scheduleId: string) {
     // Tra l\u1ea1i PPCT theo s\u1ed1 ti\u1ebft \u0111\u00fang
     const curriculum = await prisma.curriculum.findFirst({
       where: {
-        subjectId: assignment.subjectId,
+        subject: { name: assignment.subject.name },
         grade: assignment.class.grade,
         lessonNumber: autoLessonNum,
       }
@@ -728,7 +731,7 @@ export async function syncAssignmentPPCT(assignmentId: string, schoolYear: strin
   try {
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
-      include: { class: true }
+      include: { class: true, subject: true }
     });
     if (!assignment) return;
 
@@ -736,7 +739,7 @@ export async function syncAssignmentPPCT(assignmentId: string, schoolYear: strin
     const subjectId = assignment.subjectId;
 
     const curriculums = await prisma.curriculum.findMany({
-      where: { subjectId, grade },
+      where: { subject: { name: assignment.subject.name }, grade },
       orderBy: { lessonNumber: 'asc' }
     });
 
@@ -1195,6 +1198,27 @@ export async function importTimetableFromJSON(
     return { success: true, ...results };
   } catch (e: any) {
     console.error('Lỗi khi import JSON TKB:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+export async function syncAllWeekPPCT(weekNumber: number, schoolYear: string, classIds?: string[]) {
+  try {
+    const slots = await prisma.timetableSlot.findMany({
+      where: { 
+        weekNumber, 
+        schoolYear, 
+        ...(classIds && classIds.length > 0 ? { assignment: { classId: { in: classIds } } } : {}) 
+      },
+      select: { assignmentId: true }
+    });
+    const uniqueAssignments = [...new Set(slots.map(s => s.assignmentId))];
+    for (const aid of uniqueAssignments) {
+      await syncAssignmentPPCT(aid, schoolYear);
+    }
+    revalidatePath('/dashboard/timetable');
+    return { success: true };
+  } catch(e: any) {
     return { success: false, error: e.message };
   }
 }

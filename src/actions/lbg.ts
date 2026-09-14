@@ -183,12 +183,12 @@ export async function getLBGData(teacherId: string, weekNumbers: number[], schoo
     // 4. Fetch full PPCT for this teacher's assigned subjects and grades
     const teacherAssignments = await prisma.assignment.findMany({
       where: { teacherId, schoolYear },
-      include: { class: true }
+      include: { class: true, subject: true }
     });
     
     const subjectGrades = new Set<string>();
     teacherAssignments.forEach(a => {
-      subjectGrades.add(`${a.subjectId}-${a.class.grade}`);
+      subjectGrades.add(`${a.subject.name}-${a.class.grade}`);
     });
     
     let fullPPCT: any[] = [];
@@ -196,8 +196,10 @@ export async function getLBGData(teacherId: string, weekNumbers: number[], schoo
       fullPPCT = await prisma.curriculum.findMany({
         where: {
           OR: Array.from(subjectGrades).map(sg => {
-            const [subjectId, grade] = sg.split("-");
-            return { subjectId, grade: parseInt(grade, 10) };
+            const lastDashIndex = sg.lastIndexOf('-');
+            const subjectName = sg.slice(0, lastDashIndex);
+            const grade = sg.slice(lastDashIndex + 1);
+            return { subject: { name: subjectName }, grade: parseInt(grade, 10) };
           })
         },
         include: { subject: { select: { name: true } } },

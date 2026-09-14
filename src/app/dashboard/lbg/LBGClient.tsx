@@ -24,8 +24,8 @@ export default function LBGClient({ teachers, schoolWeeks, schoolYear, currentUs
   const [lbgData, setLbgData] = useState<{ teacherName: string, weeks: any[] } | null>(null);
   
   const [hideEmptyPeriods, setHideEmptyPeriods] = useState<boolean>(false);
-  const [isGroupedPlan, setIsGroupedPlan] = useState<boolean>(true);
-  const [showLessonPlan, setShowLessonPlan] = useState<boolean>(true);
+  const [isGroupedPlan, setIsGroupedPlan] = useState<boolean>(false);
+  const [showLessonPlan, setShowLessonPlan] = useState<boolean>(false);
 
   // Dropdown state for weeks
   const [isWeekDropdownOpen, setIsWeekDropdownOpen] = useState(false);

@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { toPng } from 'html-to-image';
 import { useRouter } from 'next/navigation';
-import { saveTimetableSlot, deleteTimetableSlot, rolloverWeek, bulkDeleteSlots, BulkDeleteMode, saveTimetableNote, importTimetableFromJSON } from '@/actions/timetable';
+import { saveTimetableSlot, deleteTimetableSlot, rolloverWeek, bulkDeleteSlots, BulkDeleteMode, saveTimetableNote, importTimetableFromJSON, syncAllWeekPPCT } from '@/actions/timetable';
 
 export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, classes, assignments, slots: initialSlots, stats: initialStats, timetableNotes = [], branch = 'Phân hiệu', level = 'ALL' }: any) {
   const router = useRouter();
@@ -25,6 +25,7 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
   const [showImportAIModal, setShowImportAIModal] = useState(false);
   const [importJSONText, setImportJSONText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [importResults, setImportResults] = useState<any>(null);
 
   // Đồng bộ khi props thay đổi (chuyển tuần)
@@ -79,7 +80,161 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
     localStorage.setItem('tkbColors', JSON.stringify(newColors));
   };
 
-  const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
+  
+  
+  
+  
+  
+  const handleSyncPPCT = async () => {
+    if (!confirm('Bạn có chắc muốn rà soát và đồng bộ lại toàn bộ PPCT cho tuần ' + weekNumber + '? (Quá trình này có thể mất vài giây)')) return;
+    setIsSyncing(true);
+    try {
+      const classIds = classes.map((c: any) => c.id);
+      const res = await syncAllWeekPPCT(weekNumber, schoolYear, classIds);
+      if (res.success) {
+        alert('Đồng bộ PPCT thành công!');
+        // Giao diện sẽ tự động revalidatePath nên data mới sẽ về
+      } else {
+        alert('Lỗi: ' + res.error);
+      }
+    } catch (e: any) {
+      alert('Lỗi kết nối');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDownloadExcel = async () => {
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('ThoiKhoaBieu');
+
+      // Setup trang in
+      worksheet.pageSetup = {
+        paperSize: 9,
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 1,
+        margins: { left: 0.2, right: 0.2, top: 0.4, bottom: 0.4, header: 0.1, footer: 0.1 }
+      };
+
+      // 1. Header
+      const headers = ['Thứ', 'Buổi', 'Tiết'];
+      classes.forEach((c: any) => {
+         headers.push(c.name);
+         headers.push('ĐC');
+      });
+      headers.push('Ghi chú');
+      
+      const headerRow = worksheet.addRow(headers);
+      headerRow.eachCell((cell: any) => {
+         cell.font = { bold: true };
+         cell.alignment = { vertical: 'middle', horizontal: 'center' };
+         cell.border = {
+           top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'}
+         };
+      });
+
+      let currentRowNum = 2;
+
+      days.forEach(day => {
+        const dayName = day === 8 ? 'Chủ Nhật' : (day === 2 ? 'Hai' : (day === 3 ? 'Ba' : (day === 4 ? 'Tư' : (day === 5 ? 'Năm' : (day === 6 ? 'Sáu' : (day === 7 ? 'Bảy' : ''))))));
+        
+        const getVisiblePeriods = (sessionStr: string) => {
+           const currentPeriods = (sessionStr === 'SANG' && showPeriod5) ? [1, 2, 3, 4, 5] : periods;
+           if (!hideEmptyRows) return currentPeriods;
+           let vPeriods = currentPeriods.filter(p => !classes.every((cls: any) => !getSlot(day, p, sessionStr, cls.id, 'NORMAL') && !getSlot(day, p, sessionStr, cls.id, 'SUBSTITUTE')));
+           if (vPeriods.length === 0 && sessionStr === 'CHIEU') {
+             const note = timetableNotes?.find((n: any) => n.dayOfWeek === day && n.session === sessionStr)?.content || '';
+             if (note.trim().length > 0) vPeriods = [1];
+           }
+           return vPeriods;
+        };
+
+        const visibleSessions = sessions.filter(s => getVisiblePeriods(s).length > 0);
+        if (visibleSessions.length === 0) return;
+
+        let dayStartRow = currentRowNum;
+
+        visibleSessions.forEach(session => {
+           const visiblePeriods = getVisiblePeriods(session);
+           let sessionStartRow = currentRowNum;
+
+           visiblePeriods.forEach((period, pIdx) => {
+             const rowData: any[] = [];
+             rowData.push(dayName);
+             rowData.push(session === 'SANG' ? 'Sáng' : 'Chiều');
+             rowData.push(`Tiết ${period}`);
+
+             classes.forEach((cls: any) => {
+                const normalSlot = getSlot(day, period, session, cls.id, 'NORMAL');
+                const subSlot = getSlot(day, period, session, cls.id, 'SUBSTITUTE');
+                const activeSlot = subSlot || normalSlot;
+                
+                if (activeSlot) {
+                   const subjectName = formatSubjectName(activeSlot.assignment.subject.name);
+                   const teacherName = activeSlot.assignment.teacher.shortName || activeSlot.assignment.teacher.name;
+                   rowData.push(`${subjectName} - ${teacherName}`);
+                } else {
+                   rowData.push('');
+                }
+                rowData.push(''); 
+             });
+
+             if (pIdx === 0) {
+               const note = timetableNotes?.find((n: any) => n.dayOfWeek === day && n.session === session)?.content || '';
+               rowData.push(note);
+             } else {
+               rowData.push('');
+             }
+
+             const row = worksheet.addRow(rowData);
+             // set a fixed height for wrapping text
+             row.eachCell((cell: any) => {
+                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                cell.border = {
+                  top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'}
+                };
+             });
+             currentRowNum++;
+           });
+
+           if (currentRowNum - 1 > sessionStartRow) {
+             worksheet.mergeCells(sessionStartRow, 2, currentRowNum - 1, 2);
+             worksheet.mergeCells(sessionStartRow, headers.length, currentRowNum - 1, headers.length);
+           }
+        });
+
+        if (currentRowNum - 1 > dayStartRow) {
+           worksheet.mergeCells(dayStartRow, 1, currentRowNum - 1, 1);
+        }
+      });
+
+      worksheet.getColumn(1).width = 10;
+      worksheet.getColumn(2).width = 10;
+      worksheet.getColumn(3).width = 10;
+      for (let i = 4; i < headers.length; i += 2) {
+         worksheet.getColumn(i).width = 18;
+         worksheet.getColumn(i+1).width = 5;
+      }
+      worksheet.getColumn(headers.length).width = 20;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `TKB_Tuan_${weekNumber}.xlsx`;
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Lỗi xuất Excel:', error);
+      alert('Có lỗi xảy ra khi tạo Excel. Vui lòng thử lại.');
+    }
+  };
+const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
     setExportMode(mode);
     setTimeout(async () => {
       if (!tableRef.current) {
@@ -320,7 +475,11 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
       return a.period - b.period;
     });
 
-    let currentLessonNum = 1;
+    
+    const existingNums = targetSlots
+      .map((s: any) => s.teachingSchedules?.[0]?.actualLessonNum || periodNumMap.get(s.id))
+      .filter((n: any) => n != null);
+    let currentLessonNum = existingNums.length > 0 ? Math.min(...existingNums) : 1;
     const updatedSlotMap = new Map<string, { actualLessonNum: number; autoLessonNum: number }>();
 
     for (const slot of validSlots) {
@@ -933,6 +1092,23 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
               >
                 {isFullscreen ? '↙️ Thu nhỏ' : '🔲 Toàn màn hình'}
               </button>
+              <button 
+                onClick={handleSyncPPCT}
+                disabled={isSyncing}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-1 no-print mr-2"
+                style={{ padding: '6px 12px' }}
+                title="Đồng bộ lại tên bài PPCT cho tuần này"
+              >
+                {isSyncing ? '⏳ Đang đồng bộ...' : '🔄 Đồng bộ PPCT'}
+              </button>
+              <button 
+                onClick={handleDownloadExcel}
+                className="bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors flex items-center gap-1 no-print mr-2"
+                style={{ padding: '6px 12px' }}
+                title="Tải TKB (Excel)"
+              >
+                📊 Tải Excel
+              </button>
               <div className="relative group inline-block">
                 <button
                   className="bg-purple-600 hover:bg-purple-700 text-white rounded text-sm font-medium transition-colors flex items-center gap-1"
@@ -1050,7 +1226,7 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
                 Năm học {schoolYear || '2026-2027'}
               </p>
             </div>
-            <table className={`w-full text-left border-collapse border-2 border-slate-400 dark:border-slate-500 bg-white dark:bg-gray-800`}>
+            <table id="tkb-table" className={`w-full text-left border-collapse border-2 border-slate-400 dark:border-slate-500 bg-white dark:bg-gray-800`}>
             <thead className="sticky top-0 z-30 shadow-md">
               <tr className="bg-gray-100 dark:bg-gray-800">
                 <th className={`sticky left-0 z-40 bg-gray-200 dark:bg-gray-800 border-2 border-slate-400 dark:border-slate-500 py-2 px-1 sm:px-3 text-[10px] sm:text-xs font-semibold uppercase text-center w-16 min-w-[64px] max-w-[64px]`}>Thứ</th>
