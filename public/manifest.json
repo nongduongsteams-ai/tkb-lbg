@@ -1,0 +1,26 @@
+{
+  "name": "TKB-LBG - Quản lý Thời Khóa Biểu",
+  "short_name": "TKB-LBG",
+  "description": "Hệ thống Quản lý Thời Khóa Biểu và Lịch Báo Giảng cho trường THCS",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["education", "productivity"]
+}

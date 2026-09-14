@@ -1,0 +1,1168 @@
+'use server';
+
+import { prisma } from '@/lib/prisma';
+import { Session_Type } from '@prisma/client';
+import { revalidatePath } from 'next/cache';
+import { createId } from '@paralleldrive/cuid2';
+
+export type BulkDeleteMode = 'week' | 'class' | 'subject' | 'teacher';
+
+
+export async function getBranchTimetable(weekNumber: number, schoolYear: string, branch: string = "Phân hiệu") {
+  // Bước 1: Lấy danh sách lớp (cần trước để lấy classIds)
+  const classes = await prisma.class.findMany({
+    where: { schoolYear, branch },
+    select: { id: true, name: true, grade: true },
+    orderBy: { name: 'asc' }
+  });
+  
+  const classIds = classes.map(c => c.id);
+
+  // Bước 2: Lấy assignments, slots, weeklyPlans và schoolPlans song song
+  const [assignments, slots, weeklyPlans, schoolPlans, timetableNotes] = await Promise.all([
+    prisma.assignment.findMany({
+      where: { schoolYear, classId: { in: classIds } },
+      include: {
+        teacher: { select: { id: true, name: true, shortName: true } },
+        subject: { select: { id: true, name: true, parentSubjectId: true, childSubjects: { select: { id: true } } } },
+        class: { select: { id: true, name: true } }
+      }
+    }),
+    prisma.timetableSlot.findMany({
+      where: { 
+        schoolYear, 
+        weekNumber,
+        assignment: { classId: { in: classIds } }
+      },
+      include: {
+        assignment: {
+          include: {
+            teacher: true,
+            subject: { include: { childSubjects: { select: { id: true } } } },
+            class: true,
+          }
+        },
+        teachingSchedules: true
+      }
+    }),
+    prisma.weeklySchoolPlan.findMany({ where: { schoolYear } }),
+    prisma.schoolPlan.findMany({ where: { schoolYear } }),
+    prisma.timetableNote.findMany({ where: { schoolYear, branch, weekNumber } }),
+  ]);
+
+  return { classes, assignments, slots, weeklyPlans, schoolPlans, timetableNotes };
+}
+
+export async function saveTimetableSlot(
+  assignmentId: string, 
+  weekNumber: number, 
+  dayOfWeek: number, 
+  period: number, 
+  session: Session_Type, 
+  schoolYear: string,
+  status: 'NORMAL' | 'SUBSTITUTE' | 'CANCELLED' = 'NORMAL'
+) {
+  try {
+    const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId }});
+    if (!assignment) throw new Error('Assignment not found');
+
+    const existingSlot = await prisma.timetableSlot.findFirst({
+      where: {
+        weekNumber, dayOfWeek, period, session, schoolYear, status,
+        assignment: { classId: assignment.classId }
+      }
+    });
+
+    let changedAssignmentIds = new Set<string>([assignmentId]);
+
+    if (status === 'SUBSTITUTE') {
+      const overriddenSlot = await prisma.timetableSlot.findFirst({
+        where: { weekNumber, dayOfWeek, period, session, schoolYear, status: 'NORMAL', assignment: { classId: assignment.classId } }
+      });
+      if (overriddenSlot) {
+        changedAssignmentIds.add(overriddenSlot.assignmentId);
+      }
+    }
+
+    let finalSlotId = '';
+
+    if (existingSlot) {
+      finalSlotId = existingSlot.id;
+      const oldAssignmentId = existingSlot.assignmentId;
+      if (oldAssignmentId !== assignmentId) {
+        changedAssignmentIds.add(oldAssignmentId);
+      }
+      // update
+      await prisma.timetableSlot.update({
+        where: { id: existingSlot.id },
+        data: { assignmentId }
+      });
+      // also update teaching schedule if needed... for simplicity we just recreate it
+      await prisma.teachingSchedule.deleteMany({ where: { timetableSlotId: existingSlot.id }});
+      await prisma.teachingSchedule.create({
+        data: {
+          timetableSlotId: existingSlot.id,
+          weekNumber,
+          date: new Date(), // temporary
+          actualLessonNum: 0,
+          actualLessonName: 'Chưa cập nhật tên bài',
+        }
+      });
+    } else {
+      const newSlot = await prisma.timetableSlot.create({
+        data: {
+          assignmentId, weekNumber, dayOfWeek, period, session, schoolYear, status
+        }
+      });
+      finalSlotId = newSlot.id;
+      await prisma.teachingSchedule.create({
+        data: {
+          timetableSlotId: newSlot.id,
+          weekNumber,
+          date: new Date(), // temporary
+          actualLessonNum: 0,
+          actualLessonName: 'Chưa cập nhật tên bài',
+        }
+      });
+    }
+
+    // Đồng bộ lại tiết PPCT song song cho các phân công bị thay đổi
+    await Promise.all(Array.from(changedAssignmentIds).map(aId => syncAssignmentPPCT(aId, schoolYear)));
+
+    revalidatePath('/dashboard/timetable/branch');
+    return { success: true, slotId: finalSlotId };
+  } catch (e: any) {
+    console.error(e);
+    return { success: false, error: e.message };
+  }
+}
+
+export async function saveTimetableNote(
+  weekNumber: number,
+  dayOfWeek: number,
+  session: Session_Type,
+  content: string,
+  schoolYear: string,
+  branch: string = "Phân hiệu"
+) {
+  try {
+    const existingNote = await prisma.timetableNote.findUnique({
+      where: {
+        weekNumber_dayOfWeek_session_branch_schoolYear: {
+          weekNumber, dayOfWeek, session, branch, schoolYear
+        }
+      }
+    });
+
+    if (existingNote) {
+      if (!content.trim()) {
+        await prisma.timetableNote.delete({ where: { id: existingNote.id } });
+      } else {
+        await prisma.timetableNote.update({
+          where: { id: existingNote.id },
+          data: { content }
+        });
+      }
+    } else {
+      if (content.trim()) {
+        await prisma.timetableNote.create({
+          data: { weekNumber, dayOfWeek, session, content, schoolYear, branch }
+        });
+      }
+    }
+    revalidatePath('/dashboard/timetable/branch');
+    return { success: true };
+  } catch (e: any) {
+    console.error(e);
+    return { success: false, error: e.message };
+  }
+}
+
+export async function deleteTimetableSlot(slotId: string) {
+  try {
+    const slot = await prisma.timetableSlot.findUnique({ 
+      where: { id: slotId },
+      include: { assignment: true }
+    });
+    if (!slot) return { success: false, error: 'Not found' };
+
+    const { assignmentId, schoolYear, status } = slot;
+    const changedAssignmentIds = new Set<string>([assignmentId]);
+
+    if (status === 'SUBSTITUTE') {
+      const overriddenSlot = await prisma.timetableSlot.findFirst({
+        where: { 
+          weekNumber: slot.weekNumber, 
+          dayOfWeek: slot.dayOfWeek, 
+          period: slot.period, 
+          session: slot.session, 
+          schoolYear: slot.schoolYear, 
+          status: 'NORMAL', 
+          assignment: { classId: slot.assignment.classId } 
+        }
+      });
+      if (overriddenSlot) {
+        changedAssignmentIds.add(overriddenSlot.assignmentId);
+      }
+    }
+
+    await prisma.$transaction([
+      prisma.teachingSchedule.deleteMany({ where: { timetableSlotId: slotId } }),
+      prisma.timetableSlot.delete({ where: { id: slotId } })
+    ]);
+
+    // Đồng bộ lại tiết PPCT
+    await Promise.all(Array.from(changedAssignmentIds).map(aId => syncAssignmentPPCT(aId, schoolYear)));
+
+    revalidatePath('/dashboard/timetable/branch');
+    return { success: true };
+  } catch (e: any) {
+    console.error(e);
+    return { success: false, error: e.message };
+  }
+}
+
+export async function getDashboardStats(weekNumber: number, schoolYear: string, branch: string = "Phân hiệu") {
+  // Return stats for sidebar
+  const classes = await prisma.class.findMany({ 
+    where: { schoolYear, branch },
+    orderBy: { name: 'asc' }
+  });
+  const classIds = classes.map(c => c.id);
+
+  // Pre-fetch all data to avoid N+1 queries
+  const allWeeklyPlans = await prisma.weeklySchoolPlan.findMany({ where: { schoolYear } });
+  const allGlobalPlans = await prisma.schoolPlan.findMany({ where: { schoolYear } });
+  
+  const allAssignments = await prisma.assignment.findMany({
+    where: { schoolYear, classId: { in: classIds } },
+    include: { subject: true }
+  });
+  
+  const allSlots = await prisma.timetableSlot.findMany({
+    where: { schoolYear, assignment: { classId: { in: classIds } } },
+    select: {
+      id: true,
+      weekNumber: true,
+      dayOfWeek: true,
+      session: true,
+      period: true,
+      status: true,
+      assignmentId: true,
+      assignment: { select: { classId: true } },
+      teachingSchedules: { select: { actualLessonNum: true } }
+    }
+  });
+
+  const overriddenSlotIds = new Set<string>();
+  const subSlots = allSlots.filter(s => s.status === 'SUBSTITUTE');
+  for (const normal of allSlots.filter(s => s.status === 'NORMAL')) {
+    if (subSlots.some(sub => 
+       sub.weekNumber === normal.weekNumber &&
+       sub.dayOfWeek === normal.dayOfWeek &&
+       sub.session === normal.session &&
+       sub.period === normal.period &&
+       sub.assignment.classId === normal.assignment.classId
+    )) {
+       overriddenSlotIds.add(normal.id);
+    }
+  }
+
+  const validSlots = allSlots.filter(s => !overriddenSlotIds.has(s.id));
+
+  const stats = [];
+  
+  for (const cls of classes) {
+    const assignments = allAssignments.filter(a => a.classId === cls.id);
+    const clsSlots = validSlots.filter(s => s.assignment.classId === cls.id);
+
+    const subjectsList = assignments.map((a) => {
+        const subjectSlots = clsSlots.filter(s => s.assignmentId === a.id);
+        const scheduledWeek = subjectSlots.filter(s => s.weekNumber === weekNumber).length;
+        const scheduledHk1 = subjectSlots.filter(s => s.weekNumber <= 18 && s.weekNumber <= weekNumber).length;
+        const scheduledHk2 = subjectSlots.filter(s => s.weekNumber > 18 && s.weekNumber <= weekNumber).length;
+        const scheduledYear = subjectSlots.filter(s => s.weekNumber <= weekNumber).length;
+        
+        let planWeek = 0;
+        let planHk1 = 0;
+        let planHk2 = 0;
+        let planYear = 0;
+
+        // Fetch from memory
+        const weeklyPlans = allWeeklyPlans.filter(
+          wp => wp.grade === cls.grade && wp.subjectName === a.subject.name
+        );
+        
+        let hasWeeklyPlan = false;
+        if (weeklyPlans.length > 0) {
+          hasWeeklyPlan = true;
+          for (const wp of weeklyPlans) {
+            if (wp.weeklyData) {
+              const data = wp.weeklyData as string[];
+              const total = data.reduce((sum, val) => sum + (parseInt(val, 10) || 0), 0);
+              
+              if (wp.semester === 1) {
+                planHk1 += total;
+                if (weekNumber <= 18 && weekNumber <= data.length) {
+                  planWeek = parseInt(data[weekNumber - 1], 10) || 0;
+                }
+              } else if (wp.semester === 2) {
+                planHk2 += total;
+                if (weekNumber > 18 && (weekNumber - 18) <= data.length) {
+                  planWeek = parseInt(data[weekNumber - 19], 10) || 0;
+                }
+              }
+            }
+          }
+          planYear = planHk1 + planHk2;
+        }
+        
+        // Fetch from memory
+        const globalPlan = allGlobalPlans.find(
+          gp => gp.grade === cls.grade && gp.subjectName === a.subject.name
+        );
+        
+        if (!hasWeeklyPlan && globalPlan) {
+          planHk1 = globalPlan.totalHk1;
+          planHk2 = globalPlan.totalHk2;
+          planYear = globalPlan.totalYear;
+          if (planWeek === 0) {
+            planWeek = weekNumber <= 18 ? globalPlan.periodsPerWeekHk1 : globalPlan.periodsPerWeekHk2;
+          }
+        }
+        
+        // Calculate duplicates across the entire year
+        const lessonNums = subjectSlots.flatMap((s: any) => s.teachingSchedules?.map((ts: any) => ts.actualLessonNum) || []).filter((n: any) => n && n > 0);
+        const duplicateLessonNums = Array.from(new Set(lessonNums.filter((item: number, index: number) => lessonNums.indexOf(item) !== index)));
+
+        return {
+          subjectName: a.subject.name,
+          scheduledWeek,
+          planWeek,
+          scheduledHk1,
+          planHk1,
+          scheduledHk2,
+          planHk2,
+          scheduledYear,
+          planYear,
+          status: scheduledWeek === planWeek ? 'green' : (scheduledWeek < planWeek ? 'red' : 'yellow'),
+          duplicateLessonNums
+        };
+      });
+      
+      // Sort subjects: prioritize subjects with more periods per week, then alphabetically by name
+      subjectsList.sort((a, b) => {
+        if (b.planWeek !== a.planWeek) {
+          return b.planWeek - a.planWeek;
+        }
+        return a.subjectName.localeCompare(b.subjectName, 'vi');
+      });
+
+      stats.push({
+        className: cls.name,
+        subjects: subjectsList
+      });
+  }
+  return stats;
+}
+
+export async function updateTeachingSchedule(
+  scheduleId: string,
+  newLessonNum: number,
+  newLessonName: string,
+  reason?: string,
+  isProgression: boolean = false
+) {
+  try {
+    // 1. L\u1ea5y schedule hi\u1ec7n t\u1ea1i k\u00e8m context \u0111\u1ea7y \u0111\u1ee7
+    const schedule = await prisma.teachingSchedule.findUnique({
+      where: { id: scheduleId },
+      include: {
+        timetableSlot: {
+          include: {
+            assignment: {
+              include: {
+                class: true,
+                subject: true,
+                teacher: true,
+              }
+            }
+          }
+        }
+      }
+    });
+    if (!schedule) return { success: false, error: 'Kh\u00f4ng t\u00ecm th\u1ea5y b\u1ea3n ghi' };
+
+    const slot = schedule.timetableSlot;
+    const assignment = slot.assignment;
+    const schoolYear = slot.schoolYear;
+
+    // 2. T\u00ednh s\u1ed1 ti\u1ebft \u0111\u00fang theo TKB (autoLessonNum)
+    // \u0110\u1ebfm s\u1ed1 slot c\u00f3 tr\u01b0\u1edbc slot n\u00e0y theo th\u1ee9 t\u1ef1 th\u1eddi gian
+    const classSlots = await prisma.timetableSlot.findMany({
+      where: { schoolYear, assignment: { classId: assignment.classId } },
+      include: { teachingSchedules: true }
+    });
+
+    // Lo\u1ea1i b\u1ecf ti\u1ebft b\u1ecb \u0111\u00e8
+    const subSlots = classSlots.filter(s => s.status === 'SUBSTITUTE');
+    const overriddenIds = new Set<string>();
+    for (const normal of classSlots.filter(s => s.status === 'NORMAL')) {
+      if (subSlots.some(sub =>
+        sub.weekNumber === normal.weekNumber &&
+        sub.dayOfWeek === normal.dayOfWeek &&
+        sub.session === normal.session &&
+        sub.period === normal.period
+      )) {
+        overriddenIds.add(normal.id);
+      }
+    }
+
+    const validSlots = classSlots
+      .filter(s => s.assignmentId === assignment.id && !overriddenIds.has(s.id))
+      .sort((a, b) => {
+        if (a.weekNumber !== b.weekNumber) return a.weekNumber - b.weekNumber;
+        if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+        if (a.session !== b.session) return a.session === 'SANG' ? -1 : 1;
+        return a.period - b.period;
+      });
+
+    const slotIndex = validSlots.findIndex(s => s.id === slot.id);
+    const autoLessonNum = slotIndex >= 0 ? slotIndex + 1 : null;
+
+    // 3. Tra c\u1ee9u PPCT theo s\u1ed1 ti\u1ebft m\u1edbi (\u0111\u1ec3 t\u1ef1 \u0111i\u1ec1n t\u00ean b\u00e0i)
+    const curriculum = await prisma.curriculum.findFirst({
+      where: {
+        subjectId: assignment.subjectId,
+        grade: assignment.class.grade,
+        lessonNumber: newLessonNum,
+      }
+    });
+
+    // N\u1ebfu user kh\u00f4ng truy\u1ec1n t\u00ean b\u00e0i (ho\u1eb7c tr\u01b0\u1ef3ng empty) th\u00ec t\u1ef1 l\u1ea5y t\u1eeb PPCT
+    const resolvedLessonName = (newLessonName && newLessonName.trim())
+      ? newLessonName
+      : (curriculum?.lessonName || 'Ch\u01b0a c\u00f3 PPCT');
+    const curriculumId = curriculum?.id || null;
+
+    // 4. Ki\u1ec3m tra c\u00f3 l\u1ec7ch TKB kh\u00f4ng
+    const isOverride = autoLessonNum !== null && newLessonNum !== autoLessonNum;
+
+    // Early return n\u1ebfu user kh\u00f4ng thay \u0111\u1ed5i g\u00ec
+    if (newLessonNum === schedule.actualLessonNum && isProgression === schedule.isProgression && reason === undefined) {
+      return {
+        success: true,
+        isOverride: schedule.isManualOverride,
+        autoLessonNum,
+        resolvedLessonName: schedule.actualLessonName,
+        curriculumId: schedule.curriculumId
+      };
+    }
+
+    // 5. L\u1ea5y t\u00ean b\u00e0i c\u1ee7a s\u1ed1 ti\u1ebft c\u0169 (\u0111\u1ec3 l\u01b0u v\u00e0o log)
+    let fromLessonName = schedule.actualLessonName;
+    if (autoLessonNum && isOverride) {
+      const fromCurriculum = await prisma.curriculum.findFirst({
+        where: {
+          subjectId: assignment.subjectId,
+          grade: assignment.class.grade,
+          lessonNumber: schedule.actualLessonNum,
+        }
+      });
+      fromLessonName = fromCurriculum?.lessonName || schedule.actualLessonName;
+    }
+
+    // 6. Cập nhật TeachingSchedule
+    await prisma.teachingSchedule.update({
+      where: { id: scheduleId },
+      data: {
+        actualLessonNum: newLessonNum,
+        actualLessonName: resolvedLessonName,
+        curriculumId,
+        isManualOverride: isOverride,
+        isProgression: isOverride ? isProgression : false,
+        autoLessonNum: isOverride ? autoLessonNum : null,
+      }
+    });
+
+    // 7. Ghi log nếu là override, ngược lại thì đánh dấu các log cũ là đã revert
+    if (isOverride) {
+      await prisma.lessonOverrideLog.create({
+        data: {
+          scheduleId,
+          weekNumber: slot.weekNumber,
+          className: assignment.class.name,
+          subjectName: assignment.subject.name,
+          teacherName: assignment.teacher.name,
+          dayOfWeek: slot.dayOfWeek,
+          period: slot.period,
+          fromLessonNum: schedule.actualLessonNum,
+          toLessonNum: newLessonNum,
+          fromLessonName,
+          toLessonName: resolvedLessonName,
+          reason: reason || null,
+          isProgression,
+        }
+      });
+    } else {
+      await prisma.lessonOverrideLog.updateMany({
+        where: { scheduleId, isReverted: false },
+        data: { isReverted: true }
+      });
+    }
+
+    // 8. Nếu là ép tịnh tiến hoặc bỏ ép, ta cần sync lại PPCT toàn bộ assignment
+    // để các tiết sau tự động dịch chuyển
+    if (isProgression || !isOverride) {
+      await syncAssignmentPPCT(assignment.id, schoolYear);
+    }
+
+    revalidatePath('/dashboard/timetable/branch');
+    revalidatePath('/dashboard/timetable/branch/detailed');
+    return {
+      success: true,
+      isOverride,
+      autoLessonNum,
+      resolvedLessonName,
+      curriculumId
+    };
+  } catch(e: any) {
+    console.error('L\u1ed7i c\u1eadp nh\u1eadt LBG:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * L\u1ea5y l\u1ecbch s\u1eed \u00e9p s\u1ed1 ti\u1ebft th\u1ee7 c\u00f4ng trong m\u1ed9t tu\u1ea7n
+ */
+export async function getOverrideLogs(weekNumber: number, schoolYear: string, branch: string = 'Ph\u00e2n hi\u1ec7u') {
+  try {
+    // L\u1ea5y classIds c\u1ee7a ph\u00e2n hi\u1ec7u
+    const classes = await prisma.class.findMany({
+      where: { schoolYear, branch },
+      select: { name: true }
+    });
+    const classNames = classes.map(c => c.name);
+
+    const logs = await prisma.lessonOverrideLog.findMany({
+      where: {
+        weekNumber,
+        className: { in: classNames }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return { success: true, logs };
+  } catch (e: any) {
+    return { success: false, error: e.message, logs: [] };
+  }
+}
+
+/**
+ * Ho\u00e0n t\u00e1c \u00e9p s\u1ed1 ti\u1ebft: tr\u1edf v\u1ec1 s\u1ed1 ti\u1ebft t\u1ef1 \u0111\u1ed9ng theo TKB
+ */
+export async function resetLessonOverride(scheduleId: string) {
+  try {
+    const schedule = await prisma.teachingSchedule.findUnique({
+      where: { id: scheduleId },
+      include: {
+        timetableSlot: {
+          include: {
+            assignment: {
+              include: { class: true, subject: true }
+            }
+          }
+        }
+      }
+    });
+    if (!schedule) return { success: false, error: 'Kh\u00f4ng t\u00ecm th\u1ea5y b\u1ea3n ghi' };
+    if (!schedule.isManualOverride || !schedule.autoLessonNum) {
+      return { success: true, message: 'Ti\u1ebft n\u00e0y kh\u00f4ng b\u1ecb \u00e9p th\u1ee7 c\u00f4ng' };
+    }
+
+    const { autoLessonNum } = schedule;
+    const assignment = schedule.timetableSlot.assignment;
+
+    // Tra l\u1ea1i PPCT theo s\u1ed1 ti\u1ebft \u0111\u00fang
+    const curriculum = await prisma.curriculum.findFirst({
+      where: {
+        subjectId: assignment.subjectId,
+        grade: assignment.class.grade,
+        lessonNumber: autoLessonNum,
+      }
+    });
+
+    const restoredName = curriculum?.lessonName || 'Ch\u01b0a c\u00f3 PPCT';
+
+    await prisma.teachingSchedule.update({
+      where: { id: scheduleId },
+      data: {
+        actualLessonNum: autoLessonNum,
+        actualLessonName: restoredName,
+        curriculumId: curriculum?.id || null,
+        isManualOverride: false,
+        autoLessonNum: null,
+      }
+    });
+
+    // \u0110\u00e1nh d\u1ea5u log t\u01b0\u01a1ng \u1ee9ng l\u00e0 \u0111\u00e3 ho\u00e0n t\u00e1c
+    await prisma.lessonOverrideLog.updateMany({
+      where: { scheduleId, isReverted: false },
+      data: { isReverted: true }
+    });
+
+    revalidatePath('/dashboard/timetable/branch');
+    revalidatePath('/dashboard/timetable/branch/detailed');
+    return { success: true, autoLessonNum, restoredName };
+  } catch (e: any) {
+    console.error('L\u1ed7i ho\u00e0n t\u00e1c:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+export async function rolloverWeek(fromWeek: number, toWeek: number, schoolYear: string, branch: string = "Phân hiệu") {
+  try {
+    // Lấy các lớp của phân hiệu
+    const classes = await prisma.class.findMany({ 
+      where: { schoolYear, branch },
+      orderBy: { name: 'asc' }
+    });
+    const classIds = classes.map(c => c.id);
+
+    // Xóa TKB của tuần tới (nếu có) để đè lên
+    const existingSlots = await prisma.timetableSlot.findMany({
+      where: { weekNumber: toWeek, schoolYear, assignment: { classId: { in: classIds } } }
+    });
+    const existingSlotIds = existingSlots.map(s => s.id);
+    
+    // Chunk delete để tránh lỗi too many variables
+    for (let i = 0; i < existingSlotIds.length; i += 1000) {
+      const chunkIds = existingSlotIds.slice(i, i + 1000);
+      await prisma.teachingSchedule.deleteMany({ where: { timetableSlotId: { in: chunkIds } } });
+      await prisma.timetableSlot.deleteMany({ where: { id: { in: chunkIds } } });
+    }
+
+    // Lấy TKB tuần cũ
+    const oldSlots = await prisma.timetableSlot.findMany({
+      where: { weekNumber: fromWeek, schoolYear, assignment: { classId: { in: classIds } } },
+      include: { teachingSchedules: true }
+    });
+
+    const newSlotsData: any[] = [];
+    const newSchedulesData: any[] = [];
+
+    for (const slot of oldSlots) {
+      const newSlotId = createId();
+      newSlotsData.push({
+        id: newSlotId,
+        assignmentId: slot.assignmentId,
+        weekNumber: toWeek,
+        dayOfWeek: slot.dayOfWeek,
+        period: slot.period,
+        session: slot.session,
+        schoolYear: slot.schoolYear,
+        status: slot.status
+      });
+
+      newSchedulesData.push({
+        timetableSlotId: newSlotId,
+        weekNumber: toWeek,
+        date: new Date(), // Sẽ cần cập nhật sau theo đúng lịch nếu cần
+        actualLessonNum: 0,
+        actualLessonName: `Chưa cập nhật tên bài`,
+      });
+    }
+
+    // Insert tất cả slot bằng createMany với chunk size 500
+    for (let i = 0; i < newSlotsData.length; i += 500) {
+      await prisma.timetableSlot.createMany({ data: newSlotsData.slice(i, i + 500) });
+      await prisma.teachingSchedule.createMany({ data: newSchedulesData.slice(i, i + 500) });
+    }
+
+    // Đồng bộ PPCT cho tất cả các phân công có trong tuần cũ
+    const affectedAssignmentIds = Array.from(new Set(oldSlots.map(s => s.assignmentId)));
+    
+    // Chạy đồng bộ theo nhóm (batch) thay vì chạy song song cùng lúc hàng trăm connection
+    const BATCH_SIZE = 20;
+    for (let i = 0; i < affectedAssignmentIds.length; i += BATCH_SIZE) {
+      const batch = affectedAssignmentIds.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(aId => syncAssignmentPPCT(aId, schoolYear)));
+    }
+
+    revalidatePath('/dashboard/timetable/branch');
+    return { success: true };
+  } catch (e: any) {
+    console.error("Lỗi đôn tiết:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Hàm đồng bộ tự động số tiết PPCT và Tên bài cho một Phân công chuyên môn
+ * - Lấy tất cả các tiết trên TKB của phân công này.
+ * - Sắp xếp tuyệt đối theo thời gian.
+ * - Đánh số thứ tự 1, 2, 3...
+ * - Cập nhật bảng LBG tương ứng.
+ */
+export async function syncAssignmentPPCT(assignmentId: string, schoolYear: string) {
+  try {
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: { class: true }
+    });
+    if (!assignment) return;
+
+    const grade = assignment.class.grade;
+    const subjectId = assignment.subjectId;
+
+    const curriculums = await prisma.curriculum.findMany({
+      where: { subjectId, grade },
+      orderBy: { lessonNumber: 'asc' }
+    });
+
+    const classSlots = await prisma.timetableSlot.findMany({
+      where: { schoolYear, assignment: { classId: assignment.classId } },
+      include: { teachingSchedules: true }
+    });
+
+    const overriddenSlotIds = new Set<string>();
+    const subSlots = classSlots.filter(s => s.status === 'SUBSTITUTE');
+    for (const normal of classSlots.filter(s => s.status === 'NORMAL')) {
+      if (subSlots.some(sub => 
+         sub.weekNumber === normal.weekNumber &&
+         sub.dayOfWeek === normal.dayOfWeek &&
+         sub.session === normal.session &&
+         sub.period === normal.period
+      )) {
+         overriddenSlotIds.add(normal.id);
+      }
+    }
+
+    const allTeacherSlots = classSlots.filter(s => s.assignmentId === assignmentId);
+
+    // Sort all slots by time
+    allTeacherSlots.sort((a, b) => {
+      if (a.weekNumber !== b.weekNumber) return a.weekNumber - b.weekNumber;
+      if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+      if (a.session !== b.session) {
+        return a.session === 'SANG' ? -1 : 1;
+      }
+      if (a.period !== b.period) return a.period - b.period;
+      return 0;
+    });
+
+    let currentLessonNum = 1;
+
+    const updatePromises = allTeacherSlots.map((slot) => {
+      const ts = slot.teachingSchedules[0];
+      const isOverridden = overriddenSlotIds.has(slot.id);
+
+      if (isOverridden) {
+        // Tiết bị lấp: Cập nhật bằng số tiết PPCT đã lên TRƯỚC ĐÓ gần nhất
+        // (tức là currentLessonNum - 1, vì currentLessonNum là số tiết sẽ dạy tiếp theo)
+        const lessonNumber = Math.max(1, currentLessonNum - 1);
+        const curriculum = curriculums.find(c => c.lessonNumber === lessonNumber);
+        const actualLessonName = curriculum?.lessonName || 'Chưa cập nhật tên bài';
+        const curriculumId = curriculum?.id || null;
+
+        const needsUpdate = !ts || 
+               ts.actualLessonNum !== lessonNumber || 
+               ts.actualLessonName !== actualLessonName || 
+               ts.curriculumId !== curriculumId;
+
+        if (needsUpdate) {
+          return prisma.teachingSchedule.updateMany({
+            where: { timetableSlotId: slot.id },
+            data: {
+              actualLessonNum: lessonNumber,
+              actualLessonName,
+              curriculumId,
+              autoLessonNum: lessonNumber
+            }
+          });
+        }
+        return null;
+      }
+
+      // Logic cho tiết hợp lệ (không bị lấp)
+      const hasManualOverride = ts?.isManualOverride;
+      const isProgression = ts?.isProgression;
+
+      if (hasManualOverride) {
+        if (isProgression) {
+          const autoNum = ts.autoLessonNum || currentLessonNum;
+          const offset = ts.actualLessonNum - autoNum;
+          const newActualLessonNum = currentLessonNum + offset;
+          const lessonNumber = currentLessonNum;
+          
+          currentLessonNum = newActualLessonNum + 1; // Tịnh tiến các tiết sau
+
+          const curriculum = curriculums.find(c => c.lessonNumber === newActualLessonNum);
+          const actualLessonName = curriculum?.lessonName || 'Chưa cập nhật tên bài';
+          const curriculumId = curriculum?.id || null;
+
+          const needsUpdate = ts.actualLessonNum !== newActualLessonNum || 
+                              ts.actualLessonName !== actualLessonName || 
+                              ts.curriculumId !== curriculumId ||
+                              ts.autoLessonNum !== lessonNumber;
+
+          if (needsUpdate) {
+            return prisma.teachingSchedule.updateMany({
+              where: { timetableSlotId: slot.id },
+              data: {
+                actualLessonNum: newActualLessonNum,
+                actualLessonName,
+                curriculumId,
+                autoLessonNum: lessonNumber
+              }
+            });
+          }
+          return null;
+        } else {
+          // Cục bộ
+          const lessonNumber = currentLessonNum;
+          currentLessonNum++; // Tiến độ chung vẫn tăng 1 dựa trên chronological
+
+          if (ts.autoLessonNum !== lessonNumber) {
+            return prisma.teachingSchedule.updateMany({
+              where: { timetableSlotId: slot.id },
+              data: { autoLessonNum: lessonNumber }
+            });
+          }
+          return null;
+        }
+      }
+
+      const lessonNumber = currentLessonNum;
+      currentLessonNum++;
+
+      const curriculum = curriculums.find(c => c.lessonNumber === lessonNumber);
+      const actualLessonName = curriculum?.lessonName || 'Chưa cập nhật tên bài';
+      const curriculumId = curriculum?.id || null;
+
+      const needsUpdate = !ts || 
+             ts.actualLessonNum !== lessonNumber || 
+             ts.actualLessonName !== actualLessonName || 
+             ts.curriculumId !== curriculumId;
+
+      if (needsUpdate) {
+        return prisma.teachingSchedule.updateMany({
+          where: { timetableSlotId: slot.id },
+          data: {
+            actualLessonNum: lessonNumber,
+            actualLessonName,
+            curriculumId,
+            autoLessonNum: lessonNumber // Cập nhật auto cho đúng tiến độ
+          }
+        });
+      }
+      return null;
+    }).filter(p => p !== null);
+
+    if (updatePromises.length > 0) {
+      await prisma.$transaction(updatePromises);
+    }
+  } catch (e) {
+    console.error("Lỗi đồng bộ PPCT:", e);
+  }
+}
+
+/**
+ * Hàm đồng bộ toàn bộ phân công chuyên môn trong năm học
+ */
+export async function syncAllAssignmentsPPCT(schoolYear: string) {
+  try {
+    const assignments = await prisma.assignment.findMany({
+      where: { schoolYear }
+    });
+    
+    // Chạy song song nhưng chia thành các batch nhỏ (20 requests/lần)
+    // Giảm tải nghẽn Database Connection (N+1 query problem)
+    const BATCH_SIZE = 20;
+    for (let i = 0; i < assignments.length; i += BATCH_SIZE) {
+      const batch = assignments.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(a => syncAssignmentPPCT(a.id, a.schoolYear)));
+    }
+    
+    revalidatePath('/dashboard/timetable/branch');
+    revalidatePath('/dashboard/timetable/branch/detailed');
+    return { success: true, message: `Đã đồng bộ thành công ${assignments.length} phân công chuyên môn.` };
+  } catch (e: any) {
+    console.error("Lỗi đồng bộ toàn trường:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Xóa hàng loạt TimetableSlot theo tiêu chí
+ * @param mode - 'week': toàn bộ tuần | 'class': theo lớp | 'subject': theo môn | 'teacher': theo GV
+ * @param weekNumber - Số tuần cần xóa
+ * @param schoolYear - Năm học
+ * @param branch - Phân hiệu
+ * @param filterId - classId | subjectId | teacherId (tùy mode)
+ * @param status - 'NORMAL' | 'SUBSTITUTE' | 'ALL' để chọn loại tiết cần xóa
+ */
+export async function bulkDeleteSlots(
+  mode: BulkDeleteMode,
+  weekNumber: number,
+  schoolYear: string,
+  branch: string = 'Phân hiệu',
+  filterId?: string,
+  status: 'NORMAL' | 'SUBSTITUTE' | 'ALL' = 'ALL'
+) {
+  try {
+    // Lấy danh sách lớp của phân hiệu
+    const classes = await prisma.class.findMany({
+      where: { schoolYear, branch },
+      select: { id: true }
+    });
+    const classIds = classes.map(c => c.id);
+
+    // Xây dựng điều kiện where
+    const baseWhere: any = {
+      weekNumber,
+      schoolYear,
+      assignment: { classId: { in: classIds } }
+    };
+
+    if (status !== 'ALL') {
+      baseWhere.status = status;
+    }
+
+    if (mode === 'class' && filterId) {
+      baseWhere.assignment = { classId: filterId };
+    } else if (mode === 'subject' && filterId) {
+      baseWhere.assignment = { ...baseWhere.assignment, subjectId: filterId };
+    } else if (mode === 'teacher' && filterId) {
+      baseWhere.assignment = { ...baseWhere.assignment, teacherId: filterId };
+    }
+
+    // Tìm các slot sẽ bị xóa
+    const slotsToDelete = await prisma.timetableSlot.findMany({
+      where: baseWhere,
+      select: { id: true, assignmentId: true }
+    });
+
+    if (slotsToDelete.length === 0) {
+      return { success: true, deleted: 0, message: 'Không tìm thấy tiết nào thỏa mãn điều kiện.' };
+    }
+
+    const slotIds = slotsToDelete.map(s => s.id);
+    const affectedAssignmentIds = Array.from(new Set(slotsToDelete.map(s => s.assignmentId)));
+
+    // Xóa teaching schedules trước
+    await prisma.teachingSchedule.deleteMany({
+      where: { timetableSlotId: { in: slotIds } }
+    });
+
+    // Xóa các slot
+    const deleteResult = await prisma.timetableSlot.deleteMany({
+      where: { id: { in: slotIds } }
+    });
+
+    // Đồng bộ PPCT cho tất cả phân công bị ảnh hưởng
+    await Promise.all(affectedAssignmentIds.map(aId => syncAssignmentPPCT(aId, schoolYear)));
+
+    revalidatePath('/dashboard/timetable/branch');
+    return { 
+      success: true, 
+      deleted: deleteResult.count,
+      message: `Đã xóa thành công ${deleteResult.count} tiết.`
+    };
+  } catch (e: any) {
+    console.error('Lỗi xóa hàng loạt:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Import TKB từ JSON
+ */
+export async function importTimetableFromJSON(
+  jsonData: any[],
+  weekNumber: number,
+  schoolYear: string,
+  branch: string = "Phân hiệu"
+) {
+  try {
+    const results = {
+      successCount: 0,
+      skipCount: 0,
+      skippedItems: [] as { item: any, reason: string }[],
+    };
+
+    // 1. Lấy tất cả lớp của chi nhánh
+    const classes = await prisma.class.findMany({
+      where: { schoolYear, branch }
+    });
+
+    // 2. Lấy tất cả assignments của các lớp này
+    const assignments = await prisma.assignment.findMany({
+      where: {
+        schoolYear,
+        classId: { in: classes.map(c => c.id) }
+      },
+      include: {
+        teacher: true,
+        subject: true,
+        class: true
+      }
+    });
+
+    const changedAssignmentIds = new Set<string>();
+
+    // 3. Xử lý từng dòng JSON
+    for (const item of jsonData) {
+      const { dayOfWeek, session, period, className, teacherName, subjectName } = item;
+
+      // Validate data cơ bản
+      if (!dayOfWeek || !session || !period || !className || !teacherName) {
+        results.skipCount++;
+        results.skippedItems.push({ item, reason: 'Thiếu dữ liệu bắt buộc (Thứ, Buổi, Tiết, Lớp, Tên GV)' });
+        continue;
+      }
+
+      // Tìm lớp
+      const matchedClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
+      if (!matchedClass) {
+        results.skipCount++;
+        results.skippedItems.push({ item, reason: `Không tìm thấy lớp ${className}` });
+        continue;
+      }
+
+      // Tìm phân công của lớp này
+      const classAssignments = assignments.filter(a => a.classId === matchedClass.id);
+
+      // Hàm chuẩn hóa chuỗi tiếng Việt (xóa dấu, xóa khoảng trắng, chuyển chữ thường)
+      const normalizeString = (str: string) => {
+        if (!str) return '';
+        return str.normalize('NFD')
+                  .replace(/[\u0300-\u036f]/g, '') // Xóa dấu
+                  .replace(/đ/g, 'd').replace(/Đ/g, 'd') // Đổi đ thành d
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]/g, ''); // Xóa toàn bộ khoảng trắng và ký tự đặc biệt
+      };
+
+      // Lọc theo Tên Giáo viên (matching shortName hoặc name có chứa chuỗi)
+      const searchTerm = normalizeString(String(teacherName));
+      let matchedAssignments = classAssignments.filter(a => {
+        const tShort = normalizeString(a.teacher.shortName || '');
+        const tName = normalizeString(a.teacher.name);
+        return tShort.includes(searchTerm) || tName.includes(searchTerm);
+      });
+
+      // Nếu truyền kèm môn học, lọc thêm theo môn học để chính xác hơn
+      if (subjectName && matchedAssignments.length > 1) {
+        const subjTerm = normalizeString(String(subjectName));
+        
+        // Helper map để đối chiếu tên ngắn gọn (như UI hiển thị) với tên thật trong DB
+        const formatSubjectName = (name: string) => {
+          if (!name) return '';
+          const map: Record<string, string> = {
+            'Ngữ văn': 'Văn',
+            'Ngoại ngữ 1': 'Anh',
+            'Khoa học tự nhiên (Sinh)': 'KHTNSinh',
+            'Khoa học tự nhiên (Hóa)': 'KHTNHoa',
+            'Khoa học tự nhiên (Lý)': 'KHTNLy',
+            'Lịch sử và Địa lí (Sử)': 'LSDLSu',
+            'Lịch sử và Địa lí (Địa)': 'LSDLDia',
+            'Nghệ thuật (Âm nhạc)': 'NTNhac',
+            'Nghệ thuật (Mĩ thuật)': 'NTMT',
+            'HĐTN, HN (Chào cờ)': 'HDTNHNCC',
+            'HĐTN, HN (TN CĐ)': 'HDTNHNCD',
+            'HĐTN, HN (Sinh hoạt lớp)': 'HDTNHNSH',
+            'Công nghệ': 'CN',
+            'Tin học': 'Tin',
+            'Giáo dục công dân': 'GDCD',
+            'Giáo dục thể chất': 'GDTC',
+            'Giáo dục địa phương': 'GDDP'
+          };
+          return map[name] || name;
+        };
+
+        matchedAssignments = matchedAssignments.filter(a => {
+          const dbName = normalizeString(a.subject.name);
+          const shortDbName = normalizeString(formatSubjectName(a.subject.name));
+          return dbName.includes(subjTerm) || shortDbName.includes(subjTerm) || subjTerm.includes(shortDbName);
+        });
+      }
+
+      // Quyết định dựa trên số lượng match
+      if (matchedAssignments.length === 0) {
+        results.skipCount++;
+        results.skippedItems.push({ item, reason: `Không tìm thấy GV nào tên "${teacherName}" dạy lớp ${className}` });
+        continue;
+      }
+      
+      if (matchedAssignments.length > 1) {
+        results.skipCount++;
+        results.skippedItems.push({ 
+          item, 
+          reason: `Có nhiều hơn 1 GV tên "${teacherName}" dạy lớp ${className}. Vui lòng xếp tay để tránh nhầm lẫn.` 
+        });
+        continue;
+      }
+
+      // Duy nhất 1 assignment khớp! Tiến hành xếp TKB
+      const assignmentId = matchedAssignments[0].id;
+      
+      // Xếp vào CSDL (tương tự logic saveTimetableSlot)
+      const existingSlot = await prisma.timetableSlot.findFirst({
+        where: {
+          weekNumber, dayOfWeek, period, session, schoolYear, status: 'NORMAL',
+          assignment: { classId: matchedClass.id }
+        }
+      });
+
+      if (existingSlot) {
+        const oldAssignmentId = existingSlot.assignmentId;
+        if (oldAssignmentId !== assignmentId) {
+          changedAssignmentIds.add(oldAssignmentId);
+        }
+        await prisma.timetableSlot.update({
+          where: { id: existingSlot.id },
+          data: { assignmentId }
+        });
+        
+        // Cập nhật lại LBG
+        await prisma.teachingSchedule.deleteMany({ where: { timetableSlotId: existingSlot.id }});
+        await prisma.teachingSchedule.create({
+          data: {
+            timetableSlotId: existingSlot.id,
+            weekNumber,
+            date: new Date(), // temporary
+            actualLessonNum: 0,
+            actualLessonName: 'Chưa cập nhật tên bài',
+          }
+        });
+      } else {
+        const newSlot = await prisma.timetableSlot.create({
+          data: {
+            assignmentId, weekNumber, dayOfWeek, period, session, schoolYear, status: 'NORMAL'
+          }
+        });
+        await prisma.teachingSchedule.create({
+          data: {
+            timetableSlotId: newSlot.id,
+            weekNumber,
+            date: new Date(),
+            actualLessonNum: 0,
+            actualLessonName: 'Chưa cập nhật tên bài',
+          }
+        });
+      }
+
+      changedAssignmentIds.add(assignmentId);
+      results.successCount++;
+    }
+
+    // Đồng bộ lại tiết PPCT cho các assignment bị thay đổi
+    await Promise.all(Array.from(changedAssignmentIds).map(aId => syncAssignmentPPCT(aId, schoolYear)));
+
+    revalidatePath('/dashboard/timetable/branch');
+    return { success: true, ...results };
+  } catch (e: any) {
+    console.error('Lỗi khi import JSON TKB:', e);
+    return { success: false, error: e.message };
+  }
+}

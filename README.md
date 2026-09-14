@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TKB-LBG Web Application
 
-## Getting Started
+Ứng dụng quản lý Thời Khóa Biểu và Lịch Báo Giảng cho trường THCS.
 
-First, run the development server:
+## Stack công nghệ
+
+- **Frontend**: Next.js 14 (App Router) + TypeScript + Tailwind CSS
+- **Backend**: Next.js API Routes (Serverless)
+- **Database**: PostgreSQL (Neon serverless)
+- **ORM**: Prisma
+- **Auth**: NextAuth v4
+- **Deploy**: Vercel
+- **AI**: Google Gemini API
+
+## Cài đặt & Chạy thử
+
+### 1. Clone & Install
+
+```bash
+cd web
+npm install
+```
+
+### 2. Cấu hình môi trường
+
+```bash
+cp .env.example .env.local
+# Chỉnh sửa .env.local với thông tin DB và API keys của bạn
+```
+
+### 3. Kết nối Database (Neon)
+
+1. Tạo tài khoản tại [neon.tech](https://neon.tech)
+2. Tạo project mới → copy connection string
+3. Dán vào `DATABASE_URL` và `DIRECT_URL` trong `.env.local`
+
+### 4. Khởi tạo Database
+
+```bash
+npm run db:push      # Tạo bảng theo schema
+npm run db:seed      # Nạp dữ liệu mẫu
+```
+
+### 5. Chạy development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tài khoản mặc định (sau khi seed)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Role | Email | Mật khẩu |
+|------|-------|-----------|
+| Admin | admin@truong.edu.vn | Admin@123 |
+| BGH | hieupho@truong.edu.vn | BGH@123 |
+| GV | duong@truong.edu.vn | GV@123 |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+```bash
+npm run dev          # Chạy development server
+npm run build        # Build production
+npm run db:generate  # Generate Prisma client
+npm run db:push      # Push schema lên DB (không tạo migration)
+npm run db:migrate   # Tạo migration file
+npm run db:seed      # Seed dữ liệu mẫu
+npm run db:studio    # Mở Prisma Studio
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy lên Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Push code lên GitHub
+2. Import repo vào [vercel.com](https://vercel.com)
+3. Thêm Environment Variables (DATABASE_URL, NEXTAUTH_SECRET, GEMINI_API_KEY)
+4. Deploy!
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Cấu trúc thư mục
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/
+│   ├── api/           # API Routes (Backend serverless)
+│   │   ├── auth/      # NextAuth
+│   │   ├── users/     # CRUD giáo viên
+│   │   ├── subjects/  # CRUD môn học
+│   │   ├── classes/   # CRUD lớp học
+│   │   ├── timetable/ # TKB API (Core)
+│   │   ├── lbg/       # Lịch báo giảng API
+│   │   └── ai/        # Smart Importer AI
+│   ├── dashboard/     # Dashboard pages (BGH/Admin)
+│   ├── login/         # Trang đăng nhập
+│   └── mobile/        # PWA view cho GV
+├── components/
+│   ├── layout/        # Sidebar, TopBar
+│   ├── timetable/     # TKB Grid, DnD
+│   └── ui/            # Shared UI components
+├── lib/
+│   ├── prisma.ts      # Prisma client
+│   ├── auth.ts        # NextAuth config
+│   ├── session.ts     # Session helpers
+│   └── utils.ts       # Utilities
+└── types/             # TypeScript types
+```

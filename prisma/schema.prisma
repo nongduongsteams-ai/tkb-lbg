@@ -7,9 +7,10 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // Dùng cho Neon serverless
+  url       = env("DATABASE_URL")   // Transaction mode (port 6543) — dùng cho app
+  directUrl = env("DIRECT_URL")     // Direct connection (port 5432) — dùng cho prisma migrate
 }
+
 
 // ═══════════════════════════════════════════════════════
 // 1. USERS — Quản lý người dùng & phân quyền
@@ -22,6 +23,9 @@ model User {
   dob          DateTime?
   gender       Gender?
   role         Role     @default(GV)
+  shortName    String?  @map("short_name") // Tên hiển thị trong TKB (Long)
+  permissions  String[] @default([])       // Tổ trưởng, GVBM, TPT Đội...
+  branch       String   @default("Trường chính") // Trường chính / Phân hiệu
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -47,7 +51,6 @@ model Session {
 
 // ═══════════════════════════════════════════════════════
 // 2. SCHOOL_PLAN — Khung kế hoạch giáo dục (KHGD)
-//    Đây là "chuẩn định mức" để đối chiếu Xanh/Đỏ/Vàng
 // ═══════════════════════════════════════════════════════
 model SchoolPlan {
   id                 String  @id @default(cuid())
@@ -71,8 +74,7 @@ model SchoolPlan {
 }
 
 // ═══════════════════════════════════════════════════════
-// 3. SUBJECTS — Môn học (hỗ trợ môn tích hợp parent/child)
-//    Ví dụ: KHTN (parent=null) → Lý, Hóa, Sinh (parent=KHTN)
+// 3. SUBJECTS — Môn học
 // ═══════════════════════════════════════════════════════
 model Subject {
   id              String   @id @default(cuid())
@@ -104,11 +106,11 @@ model Class {
   grade             Int
   schoolYear        String   @map("school_year")
   homeroomTeacherId String?  @map("homeroom_teacher_id")
+  branch            String   @default("Trường chính")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   homeroomTeacher User?        @relation("HomeroomTeacher", fields: [homeroomTeacherId], references: [id])
-  curriculums     Curriculum[]
   assignments     Assignment[]
 
   @@unique([name, schoolYear])
@@ -117,36 +119,32 @@ model Class {
 
 // ═══════════════════════════════════════════════════════
 // 5. CURRICULUM — Phân phối chương trình (PPCT)
-//    Mỗi record = 1 tiết dạy trong kế hoạch năm học
 // ═══════════════════════════════════════════════════════
 model Curriculum {
   id           String  @id @default(cuid())
   subjectId    String  @map("subject_id")
-  classId      String  @map("class_id")
-  weekNumber   Int     @map("week_number")    // Tuần thứ mấy trong năm học
-  lessonNumber Int     @map("lesson_number")   // Tiết PPCT (tuyến tính: 1,2,3...)
+  grade        Int     // Áp dụng chung cho cả khối (VD: 6, 7, 8, 9)
+  lessonNumber Int     @map("lesson_number")   // Tiết PPCT (1,2,3...)
   lessonName   String  @map("lesson_name")     // Tên bài dạy
   note         String?
   createdAt    DateTime @default(now()) @map("created_at")
 
   subject             Subject           @relation(fields: [subjectId], references: [id])
-  class               Class             @relation(fields: [classId], references: [id])
   teachingSchedules   TeachingSchedule[]
 
-  @@unique([subjectId, classId, lessonNumber])
+  @@unique([subjectId, grade, lessonNumber])
   @@map("curriculums")
 }
 
 // ═══════════════════════════════════════════════════════
 // 6. ASSIGNMENTS — Phân công chuyên môn
-//    GV A → Dạy môn B → Lớp C
 // ═══════════════════════════════════════════════════════
 model Assignment {
   id         String   @id @default(cuid())
   teacherId  String   @map("teacher_id")
   subjectId  String   @map("subject_id")
   classId    String   @map("class_id")
-  roleNote   String?  @map("role_note")  // "TTCM KHTN", "Quản trị mạng"...
+  roleNote   String?  @map("role_note")  // "TTCM KHTN"...
   schoolYear String   @map("school_year")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
@@ -162,15 +160,14 @@ model Assignment {
 
 // ═══════════════════════════════════════════════════════
 // 7. TIMETABLE_SLOTS — Thời khóa biểu
-//    1 record = 1 ô trong lưới TKB (Thứ × Tiết × Tuần)
 // ═══════════════════════════════════════════════════════
 model TimetableSlot {
   id           String        @id @default(cuid())
   assignmentId String        @map("assignment_id")
-  weekNumber   Int           @map("week_number")   // Tuần học
-  dayOfWeek    Int           @map("day_of_week")   // 2=Thứ 2, 3=Thứ 3 ... 7=Thứ 7
-  period       Int           // Tiết: 1-5
-  session      Session_Type  // sang | chieu
+  weekNumber   Int           @map("week_number")
+  dayOfWeek    Int           @map("day_of_week")
+  period       Int
+  session      Session_Type
   status       SlotStatus    @default(NORMAL)
   schoolYear   String        @map("school_year")
   createdAt    DateTime      @default(now()) @map("created_at")
@@ -179,35 +176,64 @@ model TimetableSlot {
   assignment        Assignment         @relation(fields: [assignmentId], references: [id])
   teachingSchedules TeachingSchedule[]
 
-  // Không cho phép 1 GV dạy 2 nơi cùng lúc (validate ở application layer)
   @@index([weekNumber, dayOfWeek, period, session])
   @@map("timetable_slots")
 }
 
 // ═══════════════════════════════════════════════════════
 // 8. TEACHING_SCHEDULES — Lịch Báo Giảng (LBG)
-//    Kết quả cuối: TKB + PPCT → LBG cho từng GV
 // ═══════════════════════════════════════════════════════
 model TeachingSchedule {
   id               String         @id @default(cuid())
   timetableSlotId  String         @map("timetable_slot_id")
-  curriculumId     String?        @map("curriculum_id")    // null nếu dùng "đôn tiết tự động"
+  curriculumId     String?        @map("curriculum_id")
   weekNumber       Int            @map("week_number")
-  date             DateTime       // Ngày dạy cụ thể
+  date             DateTime
   actualLessonNum  Int            @map("actual_lesson_num")
   actualLessonName String         @map("actual_lesson_name")
   status           ScheduleStatus @default(NORMAL)
-  preparation      String?        // "Máy chiếu", "Phòng máy"...
+  preparation      String?
   isPublished      Boolean        @default(false) @map("is_published")
   publishedAt      DateTime?      @map("published_at")
   note             String?
+  // ─── Quản lý ép thủ công ───
+  isManualOverride Boolean        @default(false) @map("is_manual_override")  // true nếu GV ép số tiết khác TKB
+  isProgression    Boolean        @default(false) @map("is_progression")      // true nếu ép tịnh tiến, false nếu ép cục bộ
+  autoLessonNum    Int?           @map("auto_lesson_num")   // Số tiết đúng theo TKB (lưu để so sánh và hoàn tác)
   createdAt        DateTime       @default(now()) @map("created_at")
   updatedAt        DateTime       @updatedAt @map("updated_at")
 
-  timetableSlot TimetableSlot @relation(fields: [timetableSlotId], references: [id])
-  curriculum    Curriculum?   @relation(fields: [curriculumId], references: [id])
+  timetableSlot TimetableSlot      @relation(fields: [timetableSlotId], references: [id])
+  curriculum    Curriculum?        @relation(fields: [curriculumId], references: [id])
+  overrideLogs  LessonOverrideLog[]
 
   @@map("teaching_schedules")
+}
+
+// ═══════════════════════════════════════════════════════
+// 9. LESSON_OVERRIDE_LOGS — Lịch sử ép số tiết thủ công
+// ═══════════════════════════════════════════════════════
+model LessonOverrideLog {
+  id             String   @id @default(cuid())
+  scheduleId     String   @map("schedule_id")
+  weekNumber     Int      @map("week_number")
+  className      String   @map("class_name")    // Tên lớp (snapshot)
+  subjectName    String   @map("subject_name")  // Tên môn (snapshot)
+  teacherName    String   @map("teacher_name")  // Tên GV (snapshot)
+  dayOfWeek      Int      @map("day_of_week")   // Thứ mấy
+  period         Int                            // Tiết mấy
+  fromLessonNum  Int      @map("from_lesson_num")   // Số tiết trước khi ép
+  toLessonNum    Int      @map("to_lesson_num")     // Số tiết sau khi ép
+  fromLessonName String   @map("from_lesson_name")  // Tên bài tương ứng số cũ
+  toLessonName   String   @map("to_lesson_name")    // Tên bài tương ứng số mới
+  reason         String?                            // Lý do (tùy chọn)
+  isProgression  Boolean  @default(false) @map("is_progression") // Loại ép tiết
+  isReverted     Boolean  @default(false) @map("is_reverted") // Đã hoàn tác chưa?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  schedule TeachingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@map("lesson_override_logs")
 }
 
 // ═══════════════════════════════════════════════════════
@@ -230,13 +256,79 @@ enum Session_Type {
 }
 
 enum SlotStatus {
-  NORMAL      // Tiết dạy bình thường
-  SUBSTITUTE  // Dạy thay (lấp giờ)
-  CANCELLED   // Tiết bị hủy
+  NORMAL
+  SUBSTITUTE
+  CANCELLED
 }
 
 enum ScheduleStatus {
-  NORMAL      // Bình thường
-  SUBSTITUTE  // Dạy thay
-  MAKEUP      // Dạy bù
+  NORMAL
+  SUBSTITUTE
+  MAKEUP
 }
+
+model WeeklySchoolPlan {
+  id          String   @id @default(cuid())
+  schoolYear  String   @map("school_year")
+  grade       Int
+  subjectName String   @map("subject_name")
+  semester    Int
+  weeklyData  Json     @map("weekly_data")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([schoolYear, grade, subjectName, semester])
+  @@map("weekly_school_plans")
+}
+
+// ═══════════════════════════════════════════════════════
+// 10. TIMETABLE_NOTES — Ghi chú cho Thời khóa biểu
+// ═══════════════════════════════════════════════════════
+model TimetableNote {
+  id          String   @id @default(cuid())
+  content     String
+  schoolYear  String   @map("school_year")
+  branch      String   @default("Phân hiệu")
+  weekNumber  Int      @map("week_number")
+  dayOfWeek   Int      @map("day_of_week") 
+  session     Session_Type
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([weekNumber, dayOfWeek, session, branch, schoolYear])
+  @@map("timetable_notes")
+}
+
+// ═══════════════════════════════════════════════════════
+// 11. SCHOOL_WEEKS — Cài đặt thời gian cho từng tuần học
+// ═══════════════════════════════════════════════════════
+model SchoolWeek {
+  id         String   @id @default(cuid())
+  schoolYear String   @map("school_year")
+  weekNumber Int      @map("week_number")
+  startDate  DateTime @map("start_date")
+  endDate    DateTime @map("end_date")
+  semester   Int      @default(1)
+  isBreak    Boolean  @default(false) @map("is_break") // Nghỉ lễ/Tết
+  note       String?
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([schoolYear, weekNumber])
+  @@map("school_weeks")
+}
+
+// ═══════════════════════════════════════════════════════
+// 12. SYSTEM_CONFIG — Cài đặt hệ thống (Liên cấp, v.v...)
+// ═══════════════════════════════════════════════════════
+model SystemConfig {
+  key   String @id
+  value String // JSON string
+  
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configs")
+}
+
