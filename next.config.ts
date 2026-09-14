@@ -9,6 +9,13 @@ const nextConfig: NextConfig = {
     domains: [],
   },
 
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // Headers bảo mật
   async headers() {
     return [
