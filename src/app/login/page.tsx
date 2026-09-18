@@ -99,7 +99,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@truong.edu.vn"
+                  placeholder="gv@c2nt.edu.vn"
                   required
                   autoComplete="email"
                   className="w-full bg-[#0f111a]/80 border border-white/5 rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all text-sm font-medium group-hover:border-white/10"
@@ -177,7 +177,7 @@ export default function LoginPage() {
               Nông Dưỡng - AI
             </div>
             <p className="text-[10px] font-medium text-zinc-600 m-0">
-              Phiên bản AI Pro 2.0 &copy; 2026
+              Phiên bản Pro 1.3.2 &copy; 2026
             </p>
           </div>
         </div>

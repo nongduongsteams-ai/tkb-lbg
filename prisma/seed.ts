@@ -15,11 +15,11 @@ async function main() {
 
   // Admin
   const admin = await prisma.user.upsert({
-    where: { email: "admin@truong.edu.vn" },
+    where: { email: "admin@c2nt.edu.vn" },
     update: {},
     create: {
       name: "Quản trị viên",
-      email: "admin@truong.edu.vn",
+      email: "admin@c2nt.edu.vn",
       passwordHash: adminPassword,
       role: Role.ADMIN,
       gender: "NAM",
@@ -28,11 +28,11 @@ async function main() {
 
   // BGH
   const bgh = await prisma.user.upsert({
-    where: { email: "hieupho@truong.edu.vn" },
+    where: { email: "hieupho@c2nt.edu.vn" },
     update: {},
     create: {
       name: "Nguyễn Thị Hiệu Phó",
-      email: "hieupho@truong.edu.vn",
+      email: "hieupho@c2nt.edu.vn",
       passwordHash: bghPassword,
       role: Role.BGH,
       gender: "NU",
@@ -41,11 +41,11 @@ async function main() {
 
   // GV mẫu từ file phân công
   const gvDuong = await prisma.user.upsert({
-    where: { email: "duong@truong.edu.vn" },
+    where: { email: "duong@c2nt.edu.vn" },
     update: {},
     create: {
       name: "Nông Văn Dưỡng",
-      email: "duong@truong.edu.vn",
+      email: "duong@c2nt.edu.vn",
       passwordHash: gvPassword,
       role: Role.GV,
       gender: "NAM",
@@ -196,9 +196,9 @@ async function main() {
 
   console.log("\n🎉 Seed completed successfully!");
   console.log("\n📋 Tài khoản mặc định:");
-  console.log("   Admin:  admin@truong.edu.vn / Admin@123");
-  console.log("   BGH:    hieupho@truong.edu.vn / BGH@123");
-  console.log("   GV:     duong@truong.edu.vn / GV@123");
+  console.log("   Admin:  admin@c2nt.edu.vn / Admin@123");
+  console.log("   BGH:    hieupho@c2nt.edu.vn / BGH@123");
+  console.log("   GV:     duong@c2nt.edu.vn / GV@123");
 }
 
 main()
