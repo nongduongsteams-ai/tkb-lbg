@@ -491,39 +491,49 @@ export default function LBGClient({ teachers, schoolWeeks, schoolYear, currentUs
   };
 
   return (
-    <div className="flex flex-col xl:flex-row gap-6 flex-1 h-full min-h-0 pb-10">
+    <div className="flex flex-col xl:flex-row gap-4 flex-1 h-full min-h-0 pb-10">
       
       {/* LEFT SIDEBAR: Controls */}
-      <div className="w-full xl:w-72 flex flex-col gap-5 flex-shrink-0 z-20">
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
-            <UserIcon className="w-5 h-5 text-indigo-500" />
+      <div className="w-full xl:w-52 flex flex-col gap-3 flex-shrink-0 z-20">
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2 flex items-center gap-2">
+            <UserIcon className="w-4 h-4 text-indigo-500" />
             Giáo viên
           </h3>
-          <select 
-            className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
-            value={selectedTeacher}
-            onChange={(e) => setSelectedTeacher(e.target.value)}
-            disabled={currentUserRole === "GV"}
-          >
-            <option value="" disabled>-- Chọn Giáo viên --</option>
-            {teachers.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
+          {currentUserRole === "GV" ? (
+            /* GV xem lịch của mình — không được chọn GV khác */
+            <div className="w-full p-2 bg-indigo-50 border border-indigo-200 rounded-lg text-sm font-medium text-indigo-800 flex items-center gap-2">
+              <UserIcon className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+              <span className="truncate">
+                {teachers.find(t => t.id === currentUserId)?.name || "Giáo viên của tôi"}
+              </span>
+            </div>
+          ) : (
+            /* ADMIN / BGH — chọn bất kỳ GV */
+            <select 
+              className="w-full p-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
+              value={selectedTeacher}
+              onChange={(e) => setSelectedTeacher(e.target.value)}
+            >
+              <option value="" disabled>-- Chọn Giáo viên --</option>
+              {teachers.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          )}
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col relative" ref={dropdownRef}>
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col relative" ref={dropdownRef}>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5 text-indigo-500" />
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+              <CalendarIcon className="w-4 h-4 text-indigo-500" />
               Tuần học ({selectedWeeks.length})
             </h3>
           </div>
           
           <button 
             onClick={() => setIsWeekDropdownOpen(!isWeekDropdownOpen)}
-            className="w-full flex items-center justify-between p-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm hover:border-indigo-400 transition-colors"
+            className="w-full flex items-center justify-between p-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm hover:border-indigo-400 transition-colors"
           >
             <span className="text-gray-700 dark:text-gray-300 truncate">
               {selectedWeeks.length === 0 ? "Chọn tuần..." : `Đã chọn ${selectedWeeks.length} tuần`}
@@ -565,22 +575,22 @@ export default function LBGClient({ teachers, schoolWeeks, schoolYear, currentUs
           )}
         </div>
 
-        <label className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+        <label className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
           <input 
             type="checkbox" 
             checked={hideEmptyPeriods}
             onChange={(e) => setHideEmptyPeriods(e.target.checked)}
             className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Ẩn tiết trống / Ngày trống</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Ẩn tiết/ngày trống</span>
         </label>
 
         <button 
           onClick={handleExportExcel}
           disabled={!lbgData || lbgData.weeks.length === 0 || isLoading}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-1"
         >
-          {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           Xuất Excel (Chuẩn)
         </button>
       </div>

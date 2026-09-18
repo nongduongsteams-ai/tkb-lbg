@@ -36,3 +36,16 @@ export function hasRole(userRole: Role | undefined, allowedRoles: Role[]) {
 // Role helpers
 export const isAdmin = (role: Role) => role === Role.ADMIN;
 export const isBGH = (role: Role) => role === Role.BGH || role === Role.ADMIN;
+export const isGV = (role: Role) => role === Role.GV;
+
+/**
+ * Xác định quyền chỉnh sửa Thời khóa biểu.
+ * Được phép: ADMIN, BGH, và GV có chức vụ Tổ trưởng chuyên môn.
+ * Bị chặn: GV thường (không có chức vụ đặc biệt).
+ */
+export function canEditTimetable(role: Role | string, permissions: string[] = []): boolean {
+  if (role === Role.ADMIN || role === Role.BGH) return true;
+  // GV có chức vụ "Tổ trưởng" bất kỳ
+  if (permissions.some(p => p.toLowerCase().includes("tổ trưởng"))) return true;
+  return false;
+}

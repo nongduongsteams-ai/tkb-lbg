@@ -39,7 +39,9 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-[#f8f9fa]">
       {/* Floating Dual-Dock Sidebar (Untitled UI Style) */}
       <Sidebar 
-        userRole={session.user.role as string} 
+        userRole={session.user.role as string}
+        userName={session.user.name ?? undefined}
+        userEmail={session.user.email ?? undefined}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />

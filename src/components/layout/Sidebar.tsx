@@ -14,19 +14,19 @@ import {
   Sparkles,
   Layers,
   ChevronLeft,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
   UserCircle,
-  Mail,
-  Phone,
-  LogOut
+  LogOut,
+  UserCog
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
 
 interface SidebarProps {
   userRole: string;
+  userName?: string;
+  userEmail?: string;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
 }
@@ -87,15 +87,21 @@ const navData = [
   {
     title: "Hệ thống",
     items: [
+      { label: "Hồ sơ & Mật khẩu", href: "/dashboard/profile", icon: UserCog, roles: ["ADMIN", "BGH", "GV"] },
       { label: "Cài đặt ứng dụng", href: "/dashboard/settings", icon: Settings, roles: ["ADMIN"] },
     ]
   }
 ];
 
-export default function Sidebar({ userRole, isCollapsed, onToggleCollapse }: SidebarProps) {
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: "Quản trị viên",
+  BGH: "Ban Giám Hiệu",
+  GV: "Giáo viên",
+};
+
+export default function Sidebar({ userRole, userName, userEmail, isCollapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [openUserMenu, setOpenUserMenu] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
     "/dashboard/school-plan": true
   });
@@ -237,61 +243,25 @@ export default function Sidebar({ userRole, isCollapsed, onToggleCollapse }: Sid
         })}
       </div>
 
-      {/* User Section */}
-      <div className="p-4 px-6 border-t border-[#2d3748] mt-auto">
-        <div 
-          onClick={() => setOpenUserMenu(!openUserMenu)}
-          className={cn(
-            "flex items-center p-3 bg-[#2d3748] rounded-lg transition-all duration-200 cursor-pointer relative hover:bg-[#374151]",
-            isCollapsed && "justify-center p-2"
-          )}
-        >
-          {openUserMenu && (
-            <div className={cn(
-              "absolute bg-[#2d3748] rounded-lg p-2 mb-2 z-[1000] shadow-lg",
-              isCollapsed ? "left-[110%] bottom-0 w-[200px]" : "bottom-[110%] left-0 w-full"
-            )}>
-              <div className="text-sm font-medium text-white px-3 py-2 border-b border-[#374151] mb-2 truncate">
-                admin@truong.edu.vn
-              </div>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  signOut({ callbackUrl: "/login" });
-                }}
-                className="w-full flex items-center p-3 text-[#DFE278] rounded-md transition-all duration-200 hover:bg-[#374151]"
-              >
-                <LogOut className="text-xl mr-3 min-w-5 text-center" />
-                <span className="text-sm font-medium">Đăng xuất</span>
-              </button>
+      {/* Copyright Section */}
+      <div className="p-6 border-t border-[#2d3748] mt-auto bg-[#1a1c23]">
+        {!isCollapsed ? (
+          <div className="flex flex-col items-center justify-center space-y-1">
+            <div className="text-[10px] font-bold tracking-widest uppercase text-[#a0aec0] mb-0.5">
+              Phát triển bởi
             </div>
-          )}
-
-          <div className={cn(
-            "relative w-10 h-10 bg-[#1a1c23] rounded-lg flex items-center justify-center",
-            !isCollapsed && "mr-3"
-          )}>
-            <UserCircle className="w-6 h-6 text-[#DFE278]" />
+            <div className="text-base font-black bg-gradient-to-r from-[#DFE278] via-[#4ade80] to-[#2dd4bf] bg-clip-text text-transparent drop-shadow-md pb-1 text-center tracking-wide">
+              Nông Dưỡng - AI
+            </div>
+            <div className="text-[10px] text-[#a0aec0]/70 font-medium mt-1">
+              &copy; 2026 TKB Pro
+            </div>
           </div>
-          
-          {!isCollapsed && (
-            <div className="flex-grow min-w-0">
-              <div className="text-[#DFE278] text-sm font-medium flex items-center justify-between">
-                <span className="truncate">Quản trị viên</span>
-                {openUserMenu ? (
-                  <ChevronDown className="w-4 h-4 text-[#a0aec0] flex-shrink-0" />
-                ) : (
-                  <ChevronUp className="w-4 h-4 text-[#a0aec0] flex-shrink-0" />
-                )}
-              </div>
-              <div className="text-[#a0aec0] text-xs mt-1 truncate">Admin System</div>
+        ) : (
+          <div className="flex justify-center items-center w-full h-full pb-2">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#DFE278] to-[#2dd4bf] flex items-center justify-center shadow-lg shadow-[#DFE278]/20" title="Phát triển bởi Nông Dưỡng - AI">
+              <span className="text-[#1a1c23] font-extrabold text-sm tracking-tighter">ND</span>
             </div>
-          )}
-        </div>
-        
-        {!isCollapsed && (
-          <div className="text-center text-xs text-[#a0aec0] mt-4 font-medium opacity-60">
-            &copy; 2026 Nông Dưỡng
           </div>
         )}
       </div>

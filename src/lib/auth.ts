@@ -37,6 +37,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           email: user.email,
           role: user.role,
+          permissions: user.permissions, // ← thêm permissions vào token
         };
       },
     }),
@@ -44,15 +45,19 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as { id: string; role: Role }).role;
-        token.id = user.id;
+        const u = user as { id: string; role: Role; permissions?: string[] };
+        token.role = u.role;
+        token.id = u.id;
+        token.permissions = u.permissions ?? [];
       }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
-        (session.user as { id: string; role: Role }).role = token.role as Role;
-        (session.user as { id: string; role: Role }).id = token.id as string;
+        const u = session.user as { id: string; role: Role; permissions: string[] };
+        u.role = token.role as Role;
+        u.id = token.id as string;
+        u.permissions = (token.permissions as string[]) ?? [];
       }
       return session;
     },

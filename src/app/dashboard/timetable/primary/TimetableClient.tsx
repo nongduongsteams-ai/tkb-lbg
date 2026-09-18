@@ -5,7 +5,7 @@ import { toPng } from 'html-to-image';
 import { useRouter } from 'next/navigation';
 import { saveTimetableSlot, deleteTimetableSlot, rolloverWeek, bulkDeleteSlots, BulkDeleteMode, saveTimetableNote, importTimetableFromJSON, syncAllWeekPPCT } from '@/actions/timetable';
 
-export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, classes, assignments, slots: initialSlots, stats: initialStats, timetableNotes = [], branch = 'Phân hiệu', level = 'ALL' }: any) {
+export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, classes, assignments, slots: initialSlots, stats: initialStats, timetableNotes = [], branch = 'Phân hiệu', level = 'ALL', readOnly = false }: any) {
   const router = useRouter();
 
   // ─── Local state — cập nhật ngay, không chờ server ──────────────────
@@ -530,6 +530,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
 
   // ─── Gán tiết ──────────────────────────────────────────────────────
   const handleAssign = useCallback((day: number, period: number, session: string, classId: string, assignmentId: string, status: 'NORMAL' | 'SUBSTITUTE' = 'NORMAL') => {
+    if (readOnly) return; // GV không được sửa TKB
     if (!assignmentId) return;
 
     const assignment = assignments.find((a: any) => a.id === assignmentId);
@@ -628,6 +629,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
   // ─── Xóa tiết ───────────────────────────────────────────────────────
   const handleDelete = useCallback((slotId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (readOnly) return; // GV không được xóa tiết
 
     const deletedSlot = localSlots.find((s: any) => s.id === slotId);
     if (!deletedSlot) return;
@@ -1094,15 +1096,17 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
               >
                 {isFullscreen ? '↙️ Thu nhỏ' : '🔲 Toàn màn hình'}
               </button>
-              <button 
-                onClick={handleSyncPPCT}
-                disabled={isSyncing}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-1 no-print mr-2"
-                style={{ padding: '6px 12px' }}
-                title="Đồng bộ lại tên bài PPCT cho tuần này"
-              >
-                {isSyncing ? '⏳ Đang đồng bộ...' : '🔄 Đồng bộ PPCT'}
-              </button>
+              {!readOnly && (
+                <button 
+                  onClick={handleSyncPPCT}
+                  disabled={isSyncing}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors flex items-center gap-1 no-print mr-2"
+                  style={{ padding: '6px 12px' }}
+                  title="Đồng bộ lại tên bài PPCT cho tuần này"
+                >
+                  {isSyncing ? '⏳ Đang đồng bộ...' : '🔄 Đồng bộ PPCT'}
+                </button>
+              )}
               <button 
                 onClick={handleDownloadExcel}
                 className="bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors flex items-center gap-1 no-print mr-2"
@@ -1157,28 +1161,32 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
               >
                 TKB Chi tiết
               </button>
-              <button
-                onClick={handleRollover}
-                disabled={rolloverPending}
-                className="bg-orange-500 hover:bg-orange-600 text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
-                style={{ padding: '8px 16px', backgroundColor: '#f97316', color: 'white' }}
-              >
-                {rolloverPending ? 'Đang xử lý...' : `Đôn tiết sang Tuần ${weekNumber + 1}`}
-              </button>
-              <button
-                onClick={() => setShowImportAIModal(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm font-medium transition-colors"
-                style={{ padding: '8px 16px', backgroundColor: '#059669', color: 'white' }}
-              >
-                🤖 Nhập TKB (AI)
-              </button>
-              <button
-                onClick={() => setShowBulkDeleteModal(true)}
-                className="bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition-colors"
-                style={{ padding: '8px 16px', backgroundColor: '#dc2626', color: 'white' }}
-              >
-                🗑️ Xóa hàng loạt
-              </button>
+              {!readOnly && (
+                <>
+                  <button
+                    onClick={handleRollover}
+                    disabled={rolloverPending}
+                    className="bg-orange-500 hover:bg-orange-600 text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+                    style={{ padding: '8px 16px', backgroundColor: '#f97316', color: 'white' }}
+                  >
+                    {rolloverPending ? 'Đang xử lý...' : `Đôn tiết sang Tuần ${weekNumber + 1}`}
+                  </button>
+                  <button
+                    onClick={() => setShowImportAIModal(true)}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm font-medium transition-colors"
+                    style={{ padding: '8px 16px', backgroundColor: '#059669', color: 'white' }}
+                  >
+                    🤖 Nhập TKB (AI)
+                  </button>
+                  <button
+                    onClick={() => setShowBulkDeleteModal(true)}
+                    className="bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition-colors"
+                    style={{ padding: '8px 16px', backgroundColor: '#dc2626', color: 'white' }}
+                  >
+                    🗑️ Xóa hàng loạt
+                  </button>
+                </>
+              )}
             </div>
           </div>
 

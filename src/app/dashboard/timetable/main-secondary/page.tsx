@@ -1,8 +1,19 @@
 import { getBranchTimetable, getDashboardStats } from '@/actions/timetable';
 import { prisma } from '@/lib/prisma';
 import TimetableClient from './TimetableClient';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+import { canEditTimetable } from '@/lib/session';
 
 export default async function BranchTimetablePage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect('/login');
+  const userRole = (session.user as { role?: string; permissions?: string[] }).role ?? 'GV';
+  const userPermissions = (session.user as { permissions?: string[] }).permissions ?? [];
+  // ADMIN, BGH, Tổ trưởng chuyên môn → được sửa TKB; GV thường → chỉ xem
+  const readOnly = !canEditTimetable(userRole, userPermissions);
+
   const resolvedParams = await searchParams;
   const schoolYear = '2026-2027'; // Should be dynamic in real app
   const branch = 'Trường chính';
@@ -59,6 +70,7 @@ export default async function BranchTimetablePage({ searchParams }: { searchPara
         slots={slots} 
         stats={stats} 
         timetableNotes={timetableNotes}
+        readOnly={readOnly}
       />
     </div>
   );
