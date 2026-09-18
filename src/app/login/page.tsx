@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, GraduationCap, Loader2, ArrowRight, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowRight, Sparkles, GraduationCap, Cpu } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function LoginPage() {
@@ -35,58 +35,85 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#09090b] grid-bg flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Ambient glowing background orbs */}
+    <div className="min-h-screen bg-[#030308] flex items-center justify-center p-4 relative overflow-hidden font-sans">
+      {/* AI/Tech Ambient Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-[600px] h-[600px] bg-indigo-600/15 rounded-full blur-[120px]" />
-        <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] bg-purple-600/15 rounded-full blur-[120px]" />
+        {/* Orbs */}
+        <div className="absolute -top-[10%] -left-[10%] w-[50vw] h-[50vw] rounded-full bg-indigo-600/20 blur-[130px] mix-blend-screen animate-[pulse_6s_ease-in-out_infinite]" />
+        <div className="absolute top-[20%] -right-[10%] w-[40vw] h-[40vw] rounded-full bg-cyan-600/15 blur-[100px] mix-blend-screen animate-[pulse_5s_ease-in-out_infinite_alternate]" />
+        <div className="absolute -bottom-[10%] left-[20%] w-[60vw] h-[60vw] rounded-full bg-purple-600/20 blur-[140px] mix-blend-screen animate-[pulse_7s_ease-in-out_infinite]" />
+        
+        {/* Subtle Tech Grid */}
+        <div 
+          className="absolute inset-0 opacity-20" 
+          style={{ 
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h40v40H0V0zm20 20h20v20H20V20zM0 20h20v20H0V20z' fill='%239C92AC' fill-opacity='0.05' fill-rule='evenodd'/%3E%3C/svg%3E")` 
+          }} 
+        />
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="relative w-full max-w-md"
+        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="relative w-full max-w-[440px] z-10"
       >
-        <div className="linear-card rounded-3xl p-8 sm:p-10 relative overflow-hidden">
+        {/* Glassmorphism Card */}
+        <div 
+          className="backdrop-blur-xl bg-[#0a0a14]/70 border border-white/10 rounded-[2rem] shadow-[0_0_50px_rgba(0,0,0,0.5),inset_0_0_0_1px_rgba(255,255,255,0.05)] flex flex-col relative overflow-hidden"
+          style={{ padding: '40px' }} // AGENTS.md rule compliance
+        >
+          {/* Top glowing line */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-50" />
+
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-tr from-indigo-600 via-purple-600 to-cyan-500 rounded-2xl mb-4 shadow-[0_0_30px_rgba(99,102,241,0.4)]">
-              <Sparkles className="w-8 h-8 text-white stroke-[2.2]" />
+          <div className="text-center mb-10 relative">
+            <div className="flex items-center justify-center space-x-3 mb-5">
+              <div className="relative flex items-center justify-center w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-[0_0_20px_rgba(99,102,241,0.5)]">
+                <Cpu className="w-7 h-7 text-white absolute" />
+                <Sparkles className="w-4 h-4 text-cyan-300 absolute -top-1 -right-1 animate-pulse" />
+              </div>
+              <div className="relative flex items-center justify-center w-14 h-14 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.5)]">
+                <GraduationCap className="w-7 h-7 text-white" />
+              </div>
             </div>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-zinc-200 to-zinc-400">
-              TKB-LBG Pro
+            
+            <h1 className="text-3xl font-black text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white via-cyan-100 to-cyan-400 drop-shadow-sm pb-1">
+              AI TKB-LBG Pro
             </h1>
-            <p className="text-zinc-400 text-xs font-medium mt-1">
-              Hệ thống Quản lý Thời Khóa Biểu Thông Minh
+            <p className="text-cyan-200/70 text-[13px] font-semibold tracking-wide uppercase mt-1">
+              Hệ thống điều hành All in one
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider ml-1" htmlFor="email">
-                Email Đăng nhập
+          <form onSubmit={handleSubmit} className="flex-grow" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label className="text-[11px] font-extrabold text-indigo-300 uppercase tracking-widest ml-1 flex items-center gap-2" htmlFor="email">
+                <span className="w-1 h-1 rounded-full bg-indigo-500"></span>
+                Tài khoản Email
               </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@truong.edu.vn"
-                required
-                autoComplete="email"
-                className="w-full px-4 py-3 bg-zinc-900/80 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all text-sm font-medium"
-              />
+              <div className="relative group">
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@truong.edu.vn"
+                  required
+                  autoComplete="email"
+                  className="w-full bg-[#0f111a]/80 border border-white/5 rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all text-sm font-medium group-hover:border-white/10"
+                  style={{ padding: '14px 20px' }}
+                />
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center ml-1">
-                <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider" htmlFor="password">
-                  Mật khẩu
-                </label>
-              </div>
-              <div className="relative">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label className="text-[11px] font-extrabold text-indigo-300 uppercase tracking-widest ml-1 flex items-center gap-2" htmlFor="password">
+                <span className="w-1 h-1 rounded-full bg-purple-500"></span>
+                Mật khẩu
+              </label>
+              <div className="relative group">
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
@@ -95,45 +122,62 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   required
                   autoComplete="current-password"
-                  className="w-full px-4 py-3 bg-zinc-900/80 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all pr-12 text-sm font-medium"
+                  className="w-full bg-[#0f111a]/80 border border-white/5 rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all pr-12 text-sm font-medium group-hover:border-white/10"
+                  style={{ padding: '14px 20px' }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-cyan-400 transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
             {error && (
-              <div className="px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs font-semibold text-rose-300">
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="px-4 py-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs font-semibold text-rose-400 flex items-center gap-2"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
                 {error}
-              </div>
+              </motion.div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 text-sm border border-indigo-400/30"
+              className="group w-full bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 hover:via-indigo-500 hover:to-purple-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-black rounded-xl shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] transition-all duration-300 flex items-center justify-center gap-3 text-sm uppercase tracking-wider relative overflow-hidden"
+              style={{ padding: '16px 20px', marginTop: '12px' }}
             >
+              {/* Button shine effect */}
+              <div className="absolute inset-0 -translate-x-[150%] group-hover:translate-x-[150%] transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12" />
+              
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Đang xử lý đăng nhập...
+                  <Loader2 className="w-5 h-5 animate-spin relative z-10" />
+                  <span className="relative z-10">Đang khởi động AI...</span>
                 </>
               ) : (
                 <>
-                  Đăng nhập Hệ thống <ArrowRight className="w-4 h-4" />
+                  <span className="relative z-10">Truy cập Hệ thống</span> <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform relative z-10" />
                 </>
               )}
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-white/10 text-center">
-            <p className="text-[11px] font-medium text-zinc-500">
-              Năm học 2026-2027 • Phiên bản Pro 2.0
+          {/* Footer & Copyright */}
+          <div className="border-t border-white/10 text-center flex flex-col items-center justify-center" style={{ marginTop: '40px', paddingTop: '24px', gap: '8px' }}>
+            <div className="text-[10px] font-bold tracking-widest uppercase text-zinc-500">
+              Phát triển với
+            </div>
+            <div className="text-sm font-black bg-gradient-to-r from-[#DFE278] via-[#4ade80] to-[#2dd4bf] bg-clip-text text-transparent drop-shadow-md pb-0.5 tracking-wide">
+              Nông Dưỡng - AI
+            </div>
+            <p className="text-[10px] font-medium text-zinc-600 m-0">
+              Phiên bản AI Pro 2.0 &copy; 2026
             </p>
           </div>
         </div>

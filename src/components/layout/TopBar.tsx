@@ -81,26 +81,32 @@ export default function TopBar({ user }: TopBarProps) {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.96 }}
                   transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="absolute right-0 top-full mt-2 w-60 bg-white rounded-2xl shadow-xl border border-[#e5e7eb] z-40 overflow-hidden p-1.5"
+                  className="absolute right-0 top-full bg-white rounded-2xl shadow-2xl border border-[#e5e7eb] z-40 overflow-hidden"
+                  style={{ padding: '8px', width: '280px', marginTop: '8px' }}
                 >
-                  <div className="p-3 border-b border-[#e5e7eb] bg-slate-50/50 rounded-xl mb-1">
-                    <p className="text-xs font-bold text-[#1a1c23] truncate">{user.name}</p>
-                    <p className="text-[11px] font-medium text-slate-500 truncate">{user.email}</p>
+                  <div 
+                    className="border-b border-[#e5e7eb] bg-slate-50/50 rounded-xl mb-2"
+                    style={{ padding: '16px' }}
+                  >
+                    <p className="font-extrabold text-[#1a1c23] truncate" style={{ fontSize: '15px', marginBottom: '4px' }}>{user.name}</p>
+                    <p className="font-medium text-slate-500 truncate" style={{ fontSize: '13px' }}>{user.email}</p>
                   </div>
 
                   <button
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-[#1a1c23] hover:bg-slate-100 transition-colors text-left"
+                    className="w-full flex items-center gap-3 rounded-xl font-semibold text-slate-600 hover:text-[#1a1c23] hover:bg-slate-100 transition-colors text-left"
+                    style={{ padding: '12px 16px', fontSize: '14px' }}
                     onClick={() => setShowMenu(false)}
                   >
-                    <User className="w-4 h-4 text-slate-400" />
+                    <User className="w-4.5 h-4.5 text-slate-400" />
                     Hồ sơ cá nhân
                   </button>
 
                   <button
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-50 transition-colors text-left mt-1"
+                    className="w-full flex items-center gap-3 rounded-xl font-semibold text-rose-500 hover:bg-rose-50 transition-colors text-left mt-1"
+                    style={{ padding: '12px 16px', fontSize: '14px' }}
                     onClick={() => signOut({ callbackUrl: "/login" })}
                   >
-                    <LogOut className="w-4 h-4" />
+                    <LogOut className="w-4.5 h-4.5" />
                     Đăng xuất
                   </button>
                 </motion.div>
