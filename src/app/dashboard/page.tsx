@@ -11,13 +11,22 @@ export default async function DashboardPage() {
   const user = session.user as { name?: string | null; role: Role };
 
   // Lấy dữ liệu tổng quan server-side
-  const [userCount, classCount, subjectCount] = await Promise.all([
+  const [userCount, classCount, subjectCount, latestTimetable] = await Promise.all([
     prisma.user.count(),
     prisma.class.count({ where: { schoolYear: "2026-2027" } }),
     prisma.subject.count(),
+    prisma.timetableSlot.findFirst({
+      orderBy: { weekNumber: 'desc' },
+      select: { weekNumber: true }
+    })
   ]);
 
-  const stats = { userCount, classCount, subjectCount };
+  const stats = { 
+    userCount, 
+    classCount, 
+    subjectCount,
+    latestWeek: latestTimetable?.weekNumber || 0
+  };
 
   return <DashboardView user={user} stats={stats} />;
 }

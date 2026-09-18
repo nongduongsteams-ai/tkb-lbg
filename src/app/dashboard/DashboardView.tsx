@@ -23,6 +23,7 @@ interface DashboardViewProps {
     userCount: number;
     classCount: number;
     subjectCount: number;
+    latestWeek?: number;
   };
 }
 
@@ -179,16 +180,24 @@ export default function DashboardView({ user, stats }: DashboardViewProps) {
               Chào mừng bạn đến với hệ thống TKB-LBG Pro thế hệ mới, dành cho năm học 2026 - 2027.
             </p>
             
-            <div className="pt-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg shadow-sm">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
-                  Thời khóa biểu Tuần 1 đã lên
-                </span>
-              </div>
+            <div className="pt-3">
+              {stats.latestWeek && stats.latestWeek > 0 ? (
+                <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-emerald-500/10 border-2 border-emerald-500/30 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[13px] font-black text-emerald-600 uppercase tracking-widest drop-shadow-sm">
+                    Thời khóa biểu Tuần {stats.latestWeek} đã lên
+                  </span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                  <span className="text-[13px] font-black text-amber-600 uppercase tracking-widest drop-shadow-sm">
+                    Chưa có Thời khóa biểu
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

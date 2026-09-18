@@ -87,8 +87,23 @@ export default function TeacherClient({ initialTeachers }: { initialTeachers: an
       if (result.data.length === 0) {
         alert("Tất cả giáo viên đã có tài khoản hợp lệ.");
       } else {
-        const summary = result.data.map((t: any) => `${t.name}: ${t.email} / ${t.password}`).join("\n");
-        alert(`✅ Đã tạo ${result.data.length} tài khoản:\n\n${summary}`);
+        // Tạo nội dung CSV
+        let csvContent = "Họ và tên,Email,Mật khẩu\n";
+        result.data.forEach((t: any) => {
+          csvContent += `"${t.name}","${t.email}","${t.password}"\n`;
+        });
+        
+        // Tạo Blob và tự động tải xuống
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: "text/csv;charset=utf-8;" }); // UTF-8 BOM
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `TaiKhoan_GiaoVien_${new Date().getTime()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        alert(`✅ Đã tạo và cập nhật ${result.data.length} tài khoản. Hệ thống đã tự động tải xuống danh sách (file CSV).`);
         // Reload teachers list
         setTeachers(prev => prev.map(t => {
           const updated = result.data?.find((u: any) => u.id === t.id);
@@ -262,7 +277,7 @@ export default function TeacherClient({ initialTeachers }: { initialTeachers: an
           <tbody>
             {sortedTeachers.map((teacher) => {
               const teacherSTT = defaultSortedTeachers.findIndex(t => t.id === teacher.id) + 1;
-              const hasDummyAccount = teacher.email?.startsWith("gv_") && teacher.email?.endsWith("@school.edu.vn");
+              const hasDummyAccount = teacher.email?.startsWith("gv_") && (teacher.email?.endsWith("@school.edu.vn") || teacher.email?.endsWith("@tkb.local"));
               return (
                 <tr key={teacher.id} className="bg-white border-b hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-4 text-center font-bold text-gray-500">{teacherSTT}</td>
@@ -410,7 +425,7 @@ export default function TeacherClient({ initialTeachers }: { initialTeachers: an
                   </div>
                   {!editingId && (
                     <p style={{ fontSize: "0.78rem", color: "#6b7280" }}>
-                      💡 Hệ thống sẽ tạo email dạng <code>tênGV@tkb.local</code> và mật khẩu ngẫu nhiên nếu để trống.
+                      💡 Hệ thống sẽ tạo email dạng <code>tênGV@c2nt.edu.vn</code> và mật khẩu ngẫu nhiên nếu để trống.
                     </p>
                   )}
                 </div>

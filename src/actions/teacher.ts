@@ -19,9 +19,9 @@ function generateUsername(name: string): string {
   return normalized;
 }
 
-/** Tạo email đăng nhập: username@tkb.local */
+/** Tạo email đăng nhập: username@c2nt.edu.vn */
 function generateEmail(name: string): string {
-  return `${generateUsername(name)}@tkb.local`;
+  return `${generateUsername(name)}@c2nt.edu.vn`;
 }
 
 /** Mật khẩu mặc định đơn giản: "gv" + 6 số cuối của timestamp */
@@ -156,9 +156,17 @@ export async function resetTeacherPassword(id: string) {
 
 export async function bulkSetupTeacherAccounts() {
   try {
-    // Tìm GV có passwordHash là dummy cũ
+    // Tìm GV có passwordHash là dummy cũ, hoặc đang dùng email ảo cũ (truong.edu.vn, tkb.local, school.edu.vn)
     const teachers = await prisma.user.findMany({
-      where: { passwordHash: "default_password_hash" },
+      where: {
+        OR: [
+          { passwordHash: "default_password_hash" },
+          { email: { endsWith: "@truong.edu.vn" } },
+          { email: { endsWith: "@tkb.local" } },
+          { email: { endsWith: "@school.edu.vn" } },
+          { email: { startsWith: "gv_" } },
+        ]
+      },
       select: { id: true, name: true, email: true },
     });
 
@@ -167,14 +175,19 @@ export async function bulkSetupTeacherAccounts() {
       const rawPassword = generateDefaultPassword();
       const passwordHash = await bcrypt.hash(rawPassword, 10);
 
-      // Cũng cập nhật email nếu đang là email ảo cũ (dạng gv_timestamp@...)
-      const emailNeedsUpdate = t.email.startsWith("gv_") && t.email.endsWith("@school.edu.vn");
+      // Cập nhật email sang định dạng mới @c2nt.edu.vn
+      const emailNeedsUpdate = 
+        t.email.endsWith("@truong.edu.vn") || 
+        t.email.endsWith("@tkb.local") || 
+        t.email.endsWith("@school.edu.vn") || 
+        t.email.startsWith("gv_");
+        
       const newEmail = emailNeedsUpdate ? generateEmail(t.name) : t.email;
 
       await prisma.user.update({
         where: { id: t.id },
         data: {
-          passwordHash,
+          passwordHash, // Cấp lại mật khẩu mới
           ...(emailNeedsUpdate ? { email: newEmail } : {}),
         },
       });
