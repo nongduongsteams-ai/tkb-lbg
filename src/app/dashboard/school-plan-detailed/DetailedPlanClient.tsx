@@ -9,6 +9,7 @@ interface Props {
   initialWeeklyPlans: WeeklySchoolPlan[];
   generalPlans: SchoolPlan[];
   schoolYear: string;
+  userRole?: string;
 }
 
 interface PlanRow {
@@ -37,7 +38,7 @@ function getParentSubject(subName: string): string {
   return subName; // Return original if no special rule
 }
 
-export default function DetailedPlanClient({ initialWeeklyPlans, generalPlans, schoolYear }: Props) {
+export default function DetailedPlanClient({ initialWeeklyPlans, generalPlans, schoolYear, userRole }: Props) {
   const [rows, setRows] = useState<PlanRow[]>([]);
   const [semester, setSemester] = useState<1 | 2>(1);
   const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -240,13 +241,15 @@ export default function DetailedPlanClient({ initialWeeklyPlans, generalPlans, s
               </select>
             </div>
             
-            <button
-              onClick={handleAdd}
-              className="flex items-center gap-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold transition-all shadow-md hover:shadow-lg whitespace-nowrap"
-              style={{ padding: '10px 20px' }}
-            >
-              <Plus size={20} /> Thêm phân môn
-            </button>
+            {userRole !== 'GV' && (
+              <button
+                onClick={handleAdd}
+                className="flex items-center gap-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold transition-all shadow-md hover:shadow-lg whitespace-nowrap"
+                style={{ padding: '10px 20px' }}
+              >
+                <Plus size={20} /> Thêm phân môn
+              </button>
+            )}
           </div>
         </div>
 
@@ -385,9 +388,11 @@ export default function DetailedPlanClient({ initialWeeklyPlans, generalPlans, s
                         <button onClick={() => handleEdit(row)} className="text-indigo-600 hover:text-indigo-800 p-2 hover:bg-indigo-50 rounded-lg transition-colors" title="Sửa">
                           <Edit2 size={18} />
                         </button>
-                        <button onClick={() => handleDelete(row)} className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors" title="Xóa">
-                          <Trash2 size={18} />
-                        </button>
+                        {userRole !== 'GV' && (
+                          <button onClick={() => handleDelete(row)} className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors" title="Xóa">
+                            <Trash2 size={18} />
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>

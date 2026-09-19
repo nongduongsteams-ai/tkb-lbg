@@ -15,8 +15,8 @@ export default async function DetailedSchoolPlanPage() {
     redirect("/login");
   }
 
-  // Check roles (only ADMIN, BGH)
-  if (session.user.role !== "ADMIN" && session.user.role !== "BGH") {
+  // Allow GV, BGH, ADMIN
+  if (!["ADMIN", "BGH", "GV"].includes(session.user.role)) {
     return (
       <div className="p-8">
         <h2 className="text-2xl font-bold text-red-600">Truy cập bị từ chối</h2>
@@ -28,7 +28,7 @@ export default async function DetailedSchoolPlanPage() {
   const currentYear = "2026-2027"; // TODO: Lấy từ cấu hình hệ thống
   
   // Fetch detailed plans
-  const weeklyPlans = await prisma.weeklySchoolPlan.findMany({
+  let weeklyPlans = await prisma.weeklySchoolPlan.findMany({
     where: { schoolYear: currentYear },
     orderBy: [
       { grade: "asc" },
@@ -37,9 +37,29 @@ export default async function DetailedSchoolPlanPage() {
   });
 
   // Fetch general plans (to compare totals)
-  const generalPlans = await prisma.schoolPlan.findMany({
+  let generalPlans = await prisma.schoolPlan.findMany({
     where: { schoolYear: currentYear }
   });
+
+  if (session.user.role === "GV") {
+    const assignments = await prisma.assignment.findMany({
+      where: { teacherId: (session.user as any).id, schoolYear: currentYear },
+      include: {
+        class: true,
+        subject: true
+      }
+    });
+
+    const allowedSet = new Set<string>();
+    assignments.forEach(a => {
+      if (a.class && a.subject) {
+        allowedSet.add(`${a.class.grade}-${a.subject.name}`);
+      }
+    });
+
+    weeklyPlans = weeklyPlans.filter(p => allowedSet.has(`${p.grade}-${p.subjectName}`));
+    generalPlans = generalPlans.filter(p => allowedSet.has(`${p.grade}-${p.subjectName}`));
+  }
 
   return (
     <div className="p-6">
@@ -47,6 +67,7 @@ export default async function DetailedSchoolPlanPage() {
         initialWeeklyPlans={weeklyPlans} 
         generalPlans={generalPlans}
         schoolYear={currentYear}
+        userRole={session.user.role}
       />
     </div>
   );
