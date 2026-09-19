@@ -1443,7 +1443,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                                 </span>
                               </span>
                             )}
-                            {!isSaving && !isOverridden && (
+                            {!isSaving && !isOverridden && !readOnly && (
                               <button
                                 className="absolute top-0 right-0 hidden group-hover:flex w-5 h-5 bg-red-500 text-white rounded-bl items-center justify-center text-xs opacity-80 hover:opacity-100 transition-opacity z-10"
                                 style={{ backgroundColor: '#ef4444', color: 'white' }}
@@ -1480,7 +1480,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                             )}
                             <div className="relative z-10 h-full">
                               {normalSlot ? renderSlotUI(normalSlot, isNormalSaving, isOverridden, 'NORMAL') : (
-                                <select
+                                !readOnly && <select
                                   className="w-full h-full text-xs p-1 bg-transparent border-none focus:ring-0 text-gray-500 cursor-pointer outline-none hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors rounded !bg-center"
                                   onChange={(e) => { handleAssign(day, period, session, cls.id, e.target.value, 'NORMAL'); e.target.value = ''; }}
                                   value=""
@@ -1502,7 +1502,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                           <td key={subKey} className={`relative border-x-2 border-slate-400 border-r-4 border-r-slate-500 dark:border-slate-500 dark:border-r-slate-400 p-1 ${borderBottomClass} bg-amber-50/40 dark:bg-amber-900/30 align-top ${isFullscreen ? '' : 'min-w-[32px]'} ${!subSlot && !isFullscreen ? 'w-8 max-w-[32px] overflow-hidden' : ''}`}>
                             <div className="relative z-10 h-full flex flex-col justify-center">
                               {subSlot ? renderSlotUI(subSlot, isSubSaving, false, 'SUBSTITUTE') : (
-                                <select
+                                !readOnly && <select
                                   className="w-full text-xs p-0 bg-transparent border-none focus:ring-0 text-gray-400 hover:text-amber-600 cursor-pointer outline-none transition-colors rounded text-center appearance-none text-lg font-light"
                                   onChange={(e) => { handleAssign(day, period, session, cls.id, e.target.value, 'SUBSTITUTE'); e.target.value = ''; }}
                                   value=""
@@ -1525,7 +1525,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                           rowSpan={visiblePeriods.length} 
                           className={`border-2 border-slate-400 border-l-4 border-l-slate-500 dark:border-slate-500 dark:border-l-slate-400 p-1 sm:p-2 text-center align-top min-w-[180px] bg-gray-100 dark:bg-gray-800`}
                         >
-                          {exportMode !== 'IDLE' ? (
+                          {exportMode !== 'IDLE' || readOnly ? (
                             <div className="w-full h-full min-h-[80px] p-1 sm:p-2 text-[10px] sm:text-xs text-left whitespace-pre-wrap break-words">
                               {timetableNotes?.find((n: any) => n.dayOfWeek === day && n.session === session)?.content || ''}
                             </div>
