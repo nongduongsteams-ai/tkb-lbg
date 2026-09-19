@@ -3,14 +3,15 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { toPng } from 'html-to-image';
 import { useRouter } from 'next/navigation';
-import { saveTimetableSlot, deleteTimetableSlot, rolloverWeek, bulkDeleteSlots, BulkDeleteMode, saveTimetableNote, importTimetableFromJSON, syncAllWeekPPCT } from '@/actions/timetable';
+import { saveTimetableSlot, deleteTimetableSlot, rolloverWeek, bulkDeleteSlots, BulkDeleteMode, saveTimetableNote, importTimetableFromJSON, syncAllWeekPPCT, saveTimetableCellNote, deleteTimetableCellNote } from '@/actions/timetable';
 
-export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, classes, assignments, slots: initialSlots, stats: initialStats, timetableNotes = [], branch = 'Phân hiệu', level = 'ALL', readOnly = false, userRole, currentUserId }: any) {
+export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, classes, assignments, slots: initialSlots, stats: initialStats, timetableNotes = [], timetableCellNotes = [], branch = 'Phân hiệu', level = 'ALL', readOnly = false, userRole, currentUserId }: any) {
   const router = useRouter();
 
   // ─── Local state — cập nhật ngay, không chờ server ──────────────────
   const [localSlots, setLocalSlots] = useState<any[]>(initialSlots);
   const [localStats, setLocalStats] = useState<any[]>(initialStats);
+  const [localCellNotes, setLocalCellNotes] = useState<any[]>(timetableCellNotes);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
   const [rolloverPending, setRolloverPending] = useState(false);
   const [isNavigatingWeek, setIsNavigatingWeek] = useState(false);
@@ -667,6 +668,46 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
         setLocalSlots(initialSlots);
       });
   }, [localSlots, initialSlots, recalculateLocalPPCT]);
+
+  // ─── Xử lý Ghi chú ô ────────────────────────────────────────────────
+  const handleSaveCellNote = useCallback((day: number, period: number, session: string, classId: string, content: string) => {
+    if (readOnly || !content.trim()) return;
+    const cellKey = `${day}-${session}-${period}-${classId}-NOTE`;
+    setSavingCells(prev => new Set(prev).add(cellKey));
+
+    setLocalCellNotes(prev => {
+      const next = [...prev.filter(n => !(n.classId === classId && n.dayOfWeek === day && n.period === period && n.session === session))];
+      next.push({ classId, dayOfWeek: day, period, session, content });
+      return next;
+    });
+
+    saveTimetableCellNote(classId, weekNumber, day, period, session as any, schoolYear, content)
+      .finally(() => {
+        setSavingCells(prev => {
+          const next = new Set(prev);
+          next.delete(cellKey);
+          return next;
+        });
+      });
+  }, [readOnly, weekNumber, schoolYear]);
+
+  const handleDeleteCellNote = useCallback((day: number, period: number, session: string, classId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (readOnly) return;
+    const cellKey = `${day}-${session}-${period}-${classId}-NOTE`;
+    setSavingCells(prev => new Set(prev).add(cellKey));
+
+    setLocalCellNotes(prev => prev.filter(n => !(n.classId === classId && n.dayOfWeek === day && n.period === period && n.session === session)));
+
+    deleteTimetableCellNote(classId, weekNumber, day, period, session as any, schoolYear)
+      .finally(() => {
+        setSavingCells(prev => {
+          const next = new Set(prev);
+          next.delete(cellKey);
+          return next;
+        });
+      });
+  }, [readOnly, weekNumber, schoolYear]);
 
   // ─── Rollover tuần ──────────────────────────────────────────────────
   const handleRollover = useCallback(() => {
@@ -1485,20 +1526,64 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                               </div>
                             )}
                             <div className="relative z-10 h-full">
-                              {normalSlot ? renderSlotUI(normalSlot, isNormalSaving, isOverridden, 'NORMAL') : (
-                                (!readOnly && exportMode === 'IDLE') && <select
-                                  className="w-full h-full text-xs p-1 bg-transparent border-none focus:ring-0 text-gray-500 cursor-pointer outline-none hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors rounded !bg-center"
-                                  onChange={(e) => { handleAssign(day, period, session, cls.id, e.target.value, 'NORMAL'); e.target.value = ''; }}
-                                  value=""
-                                >
-                                  <option value="" disabled></option>
-                                  {clsAssignments.map((a: any) => (
-                                    <option key={a.id} value={a.id}>
-                                      {formatSubjectName(a.subject.name)} ({a.teacher.name.split(' ').pop()})
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
+                              {(() => {
+                                const cellNote = localCellNotes.find((n: any) => n.classId === cls.id && n.dayOfWeek === day && n.period === period && n.session === session);
+                                if (cellNote) {
+                                  return (
+                                    <div className="relative w-full h-full flex items-center justify-center p-1 group">
+                                      <span className="font-bold text-sm text-black whitespace-pre-wrap break-words text-center" style={{ color: '#000000' }}>
+                                        {cellNote.content}
+                                      </span>
+                                      {!readOnly && exportMode === 'IDLE' && (
+                                        <button
+                                          className="absolute top-0 right-0 hidden group-hover:flex w-5 h-5 bg-red-500 text-white rounded-bl items-center justify-center text-xs opacity-80 hover:opacity-100 transition-opacity z-10"
+                                          onClick={(e) => handleDeleteCellNote(day, period, session, cls.id, e)}
+                                          title="Xóa ghi chú này"
+                                        >
+                                          &times;
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                return normalSlot ? renderSlotUI(normalSlot, isNormalSaving, isOverridden, 'NORMAL') : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center group gap-0.5">
+                                    {(!readOnly && exportMode === 'IDLE') && (
+                                      <>
+                                        <select
+                                          className="w-full h-full text-xs p-1 bg-transparent border-none focus:ring-0 text-gray-500 cursor-pointer outline-none hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors rounded !bg-center"
+                                          onChange={(e) => { handleAssign(day, period, session, cls.id, e.target.value, 'NORMAL'); e.target.value = ''; }}
+                                          value=""
+                                        >
+                                          <option value="" disabled></option>
+                                          {clsAssignments.map((a: any) => (
+                                            <option key={a.id} value={a.id}>
+                                              {formatSubjectName(a.subject.name)} ({a.teacher.name.split(' ').pop()})
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <input
+                                          type="text"
+                                          placeholder="Tùy chỉnh..."
+                                          className="w-[90%] text-[10px] p-0.5 bg-gray-50 border border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded text-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity absolute bottom-1"
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              handleSaveCellNote(day, period, session, cls.id, e.currentTarget.value);
+                                              e.currentTarget.value = '';
+                                            }
+                                          }}
+                                          onBlur={(e) => {
+                                            if (e.currentTarget.value.trim()) {
+                                              handleSaveCellNote(day, period, session, cls.id, e.currentTarget.value);
+                                              e.currentTarget.value = '';
+                                            }
+                                          }}
+                                        />
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </td>
                         );

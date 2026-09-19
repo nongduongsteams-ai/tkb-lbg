@@ -24,7 +24,7 @@ export async function getBranchTimetable(weekNumber: number, schoolYear: string,
   const classIds = classes.map(c => c.id);
 
   // Bước 2: Lấy assignments, slots, weeklyPlans và schoolPlans song song
-  const [assignments, slots, weeklyPlans, schoolPlans, timetableNotes] = await Promise.all([
+  const [assignments, slots, weeklyPlans, schoolPlans, timetableNotes, timetableCellNotes] = await Promise.all([
     prisma.assignment.findMany({
       where: { schoolYear, classId: { in: classIds } },
       include: {
@@ -53,9 +53,10 @@ export async function getBranchTimetable(weekNumber: number, schoolYear: string,
     prisma.weeklySchoolPlan.findMany({ where: { schoolYear } }),
     prisma.schoolPlan.findMany({ where: { schoolYear } }),
     prisma.timetableNote.findMany({ where: { schoolYear, branch, weekNumber } }),
+    prisma.timetableCellNote.findMany({ where: { schoolYear, weekNumber, classId: { in: classIds } } }),
   ]);
 
-  return { classes, assignments, slots, weeklyPlans, schoolPlans, timetableNotes };
+  return { classes, assignments, slots, weeklyPlans, schoolPlans, timetableNotes, timetableCellNotes };
 }
 
 export async function saveTimetableSlot(
@@ -377,6 +378,78 @@ export async function getDashboardStats(weekNumber: number, schoolYear: string, 
       });
   }
   return stats;
+}
+
+export async function saveTimetableCellNote(
+  classId: string,
+  weekNumber: number,
+  dayOfWeek: number,
+  period: number,
+  session: Session_Type,
+  schoolYear: string,
+  content: string
+) {
+  try {
+    const existing = await prisma.timetableCellNote.findFirst({
+      where: { classId, weekNumber, dayOfWeek, period, session, schoolYear }
+    });
+
+    if (existing) {
+      await prisma.timetableCellNote.update({
+        where: { id: existing.id },
+        data: { content }
+      });
+    } else {
+      await prisma.timetableCellNote.create({
+        data: {
+          classId, weekNumber, dayOfWeek, period, session, schoolYear, content
+        }
+      });
+    }
+
+    const slots = await prisma.timetableSlot.findMany({
+      where: {
+        weekNumber, dayOfWeek, period, session, schoolYear,
+        assignment: { classId }
+      }
+    });
+
+    if (slots.length > 0) {
+      for (const slot of slots) {
+        await prisma.timetableSlot.delete({ where: { id: slot.id } });
+      }
+    }
+
+    revalidatePath('/dashboard/timetable');
+    return { success: true };
+  } catch (error) {
+    console.error('Lỗi khi lưu ghi chú ô TKB:', error);
+    throw new Error('Không thể lưu ghi chú ô TKB');
+  }
+}
+
+export async function deleteTimetableCellNote(
+  classId: string,
+  weekNumber: number,
+  dayOfWeek: number,
+  period: number,
+  session: Session_Type,
+  schoolYear: string
+) {
+  try {
+    const existing = await prisma.timetableCellNote.findFirst({
+      where: { classId, weekNumber, dayOfWeek, period, session, schoolYear }
+    });
+
+    if (existing) {
+      await prisma.timetableCellNote.delete({ where: { id: existing.id } });
+      revalidatePath('/dashboard/timetable');
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Lỗi khi xoá ghi chú ô TKB:', error);
+    throw new Error('Không thể xoá ghi chú ô TKB');
+  }
 }
 
 export async function updateTeachingSchedule(

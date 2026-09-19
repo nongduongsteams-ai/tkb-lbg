@@ -42,7 +42,7 @@ export default async function BranchTimetablePage({ searchParams }: { searchPara
   }
   
   // Chạy song song vì hai hàm hoàn toàn độc lập nhau
-  const [{ classes, assignments, slots, timetableNotes }, stats, schoolWeek] = await Promise.all([
+  const [{ classes, assignments, slots, timetableNotes, timetableCellNotes }, stats, schoolWeek] = await Promise.all([
     getBranchTimetable(weekNumber, schoolYear, branch, level),
     getDashboardStats(weekNumber, schoolYear, branch, level),
     prisma.schoolWeek.findUnique({
@@ -71,6 +71,7 @@ export default async function BranchTimetablePage({ searchParams }: { searchPara
         slots={slots} 
         stats={stats} 
         timetableNotes={timetableNotes}
+        timetableCellNotes={timetableCellNotes}
         readOnly={readOnly}
         userRole={userRole}
         currentUserId={currentUserId}

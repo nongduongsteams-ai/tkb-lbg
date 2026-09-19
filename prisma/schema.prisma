@@ -111,6 +111,7 @@ model Class {
 
   homeroomTeacher User?        @relation("HomeroomTeacher", fields: [homeroomTeacherId], references: [id])
   assignments     Assignment[]
+  timetableCellNotes TimetableCellNote[]
 
   @@unique([name, schoolYear])
   @@map("classes")
@@ -329,4 +330,26 @@ model SystemConfig {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_configs")
+}
+
+// ═══════════════════════════════════════════════════════
+// 13. TIMETABLE_CELL_NOTES — Ghi chú tùy chỉnh từng ô TKB
+// ═══════════════════════════════════════════════════════
+model TimetableCellNote {
+  id         String       @id @default(cuid())
+  classId    String       @map("class_id")
+  weekNumber Int          @map("week_number")
+  dayOfWeek  Int          @map("day_of_week")
+  period     Int
+  session    Session_Type
+  schoolYear String       @map("school_year")
+  content    String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  class Class @relation(fields: [classId], references: [id])
+
+  @@unique([classId, weekNumber, dayOfWeek, period, session, schoolYear])
+  @@map("timetable_cell_notes")
 }
