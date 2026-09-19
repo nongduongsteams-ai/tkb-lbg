@@ -819,8 +819,15 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
     return a.localeCompare(b, 'vi');
   });
 
+  const gvAssignedMap = new Set<string>();
   if (userRole === 'GV' && currentUserId) {
-    const gvSubjects = new Set(assignments.filter((a: any) => a.teacherId === currentUserId).map((a: any) => a.subject.name));
+    const gvSubjects = new Set<string>();
+    assignments.forEach((a: any) => {
+      if (a.teacherId === currentUserId) {
+        gvSubjects.add(a.subject.name);
+        gvAssignedMap.add(`${a.subject.name}-${a.classId}`);
+      }
+    });
     masterSubjectsList = masterSubjectsList.filter(s => gvSubjects.has(s));
   }
 
@@ -1605,11 +1612,15 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                     </td>
                     {classes.map((cls: any) => {
                       const clsStat = derivedStats.find((s: any) => s.className === cls.name);
-                      const subjInfo = clsStat?.subjects.find((s: any) => s.subjectName === subjectName);
+                      let subjInfo = clsStat?.subjects.find((s: any) => s.subjectName === subjectName);
 
                       // Lấy danh sách trùng từ server (toàn năm học)
                       const duplicates = subjInfo?.duplicateLessonNums || [];
                       const hasDuplicate = duplicates.length > 0;
+
+                      if (userRole === 'GV' && currentUserId && !gvAssignedMap.has(`${subjectName}-${cls.id}`)) {
+                        subjInfo = undefined;
+                      }
 
                       if (!subjInfo) {
                         return <td key={`stat-${cls.id}-${subjectName}`} colSpan={exportMode === 'CLEAN' ? 1 : 2} className="border-2 border-slate-400 border-l-4 border-l-slate-500 border-r-4 border-r-slate-500 dark:border-slate-500 dark:border-l-slate-400 dark:border-r-slate-400 p-2 text-center text-gray-300 dark:text-gray-600">-</td>;
