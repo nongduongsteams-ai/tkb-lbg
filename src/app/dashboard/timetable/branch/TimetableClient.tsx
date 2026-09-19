@@ -13,6 +13,7 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
   const [localStats, setLocalStats] = useState<any[]>(initialStats);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
   const [rolloverPending, setRolloverPending] = useState(false);
+  const [isNavigatingWeek, setIsNavigatingWeek] = useState(false);
 
   // Bulk delete state
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
@@ -32,7 +33,8 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
   useEffect(() => {
     setLocalSlots(initialSlots);
     setLocalStats(initialStats);
-  }, [initialSlots, initialStats]);
+    setIsNavigatingWeek(false);
+  }, [initialSlots, initialStats, weekNumber]);
 
   const [showT, setShowT] = useState(true);
   const [showHK1, setShowHK1] = useState(true);
@@ -1136,16 +1138,24 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                 🎨 Màu sắc
               </button>
               <button
-                onClick={() => router.push(`/dashboard/timetable/branch?week=${weekNumber - 1}`)}
-                className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm font-medium hidden sm:block"
+                disabled={isNavigatingWeek}
+                onClick={() => {
+                  setIsNavigatingWeek(true);
+                  router.push(`/dashboard/timetable/branch?week=${weekNumber - 1}`);
+                }}
+                className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm font-medium hidden sm:block disabled:opacity-50"
                 style={{ padding: '6px 12px' }}
               >
                 ← Tuần trước
               </button>
               <span className="self-center font-bold text-lg px-3 bg-blue-50 text-blue-800 rounded dark:bg-blue-900/50 dark:text-blue-200" style={{ padding: '4px 12px' }}>Tuần {weekNumber}</span>
               <button
-                onClick={() => router.push(`/dashboard/timetable/branch?week=${weekNumber + 1}`)}
-                className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm font-medium"
+                disabled={isNavigatingWeek}
+                onClick={() => {
+                  setIsNavigatingWeek(true);
+                  router.push(`/dashboard/timetable/branch?week=${weekNumber + 1}`);
+                }}
+                className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm font-medium disabled:opacity-50"
                 style={{ padding: '6px 12px' }}
               >
                 Tuần sau →

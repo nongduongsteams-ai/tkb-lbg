@@ -254,7 +254,7 @@ export default function Sidebar({ userRole, userName, userEmail, isCollapsed, on
               Nông Dưỡng - AI
             </div>
             <div className="text-[10px] text-[#a0aec0]/70 font-medium mt-1">
-              &copy; 2026 TKB Pro Ver 1.3.3
+              &copy; 2026 TKB Pro Ver 1.3.4
             </div>
           </div>
         ) : (

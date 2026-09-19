@@ -337,6 +337,7 @@ export default function DetailedClient({
   slots,
   weeklyPlans = [],
   schoolPlans = [],
+  userRole,
 }: {
   weekNumber: number;
   schoolWeek?: any;
@@ -345,6 +346,7 @@ export default function DetailedClient({
   slots: any[];
   weeklyPlans?: any[];
   schoolPlans?: any[];
+  userRole?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -663,14 +665,16 @@ export default function DetailedClient({
           <p className="text-gray-500 text-sm mt-1">Đồng bộ tự động tên bài từ PPCT · Ghi lại lịch sử ép tiết thủ công.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button
-            onClick={handleSyncAll}
-            disabled={isPending}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium disabled:opacity-50"
-            style={{ padding: '8px 16px', backgroundColor: '#2563eb', color: 'white' }}
-          >
-            {isPending ? 'Đang đồng bộ...' : '↻ Đồng bộ toàn trường'}
-          </button>
+          {userRole !== 'GV' && (
+            <button
+              onClick={handleSyncAll}
+              disabled={isPending}
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium disabled:opacity-50"
+              style={{ padding: '8px 16px', backgroundColor: '#2563eb', color: 'white' }}
+            >
+              {isPending ? 'Đang đồng bộ...' : '↻ Đồng bộ toàn trường'}
+            </button>
+          )}
           <button
             onClick={showHistory ? () => setShowHistory(false) : handleShowHistory}
             style={{

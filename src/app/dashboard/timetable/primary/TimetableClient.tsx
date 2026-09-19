@@ -13,6 +13,7 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
   const [localStats, setLocalStats] = useState<any[]>(initialStats);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
   const [rolloverPending, setRolloverPending] = useState(false);
+  const [isNavigatingWeek, setIsNavigatingWeek] = useState(false);
 
   // Bulk delete state
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
@@ -32,7 +33,8 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
   useEffect(() => {
     setLocalSlots(initialSlots);
     setLocalStats(initialStats);
-  }, [initialSlots, initialStats]);
+    setIsNavigatingWeek(false);
+  }, [initialSlots, initialStats, weekNumber]);
 
   const [showT, setShowT] = useState(true);
   const [showHK1, setShowHK1] = useState(true);
