@@ -127,6 +127,8 @@ function OverrideReasonModal({
         />
 
         {/* Nút */}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
+          <button
             onClick={onSkip}
             style={{
               padding: '9px 18px', borderRadius: 8, border: '1.5px solid #e5e7eb',
