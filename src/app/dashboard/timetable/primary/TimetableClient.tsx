@@ -5,7 +5,7 @@ import { toPng } from 'html-to-image';
 import { useRouter } from 'next/navigation';
 import { saveTimetableSlot, deleteTimetableSlot, rolloverWeek, bulkDeleteSlots, BulkDeleteMode, saveTimetableNote, importTimetableFromJSON, syncAllWeekPPCT } from '@/actions/timetable';
 
-export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, classes, assignments, slots: initialSlots, stats: initialStats, timetableNotes = [], branch = 'Phân hiệu', level = 'ALL', readOnly = false }: any) {
+export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, classes, assignments, slots: initialSlots, stats: initialStats, timetableNotes = [], branch = 'Phân hiệu', level = 'ALL', readOnly = false, userRole, currentUserId }: any) {
   const router = useRouter();
 
   // ─── Local state — cập nhật ngay, không chờ server ──────────────────
@@ -815,11 +815,16 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
       subjectMaxPlanWeek[subj.subjectName] = Math.max(subjectMaxPlanWeek[subj.subjectName] || 0, subj.planWeek);
     });
   });
-  const masterSubjectsList = Object.keys(subjectMaxPlanWeek).sort((a, b) => {
+  let masterSubjectsList = Object.keys(subjectMaxPlanWeek).sort((a, b) => {
     const planDiff = subjectMaxPlanWeek[b] - subjectMaxPlanWeek[a];
     if (planDiff !== 0) return planDiff;
     return a.localeCompare(b, 'vi');
   });
+
+  if (userRole === 'GV' && currentUserId) {
+    const gvSubjects = new Set(assignments.filter((a: any) => a.teacherId === currentUserId).map((a: any) => a.subject.name));
+    masterSubjectsList = masterSubjectsList.filter(s => gvSubjects.has(s));
+  }
 
   return (
     <div className="flex flex-col gap-6 text-gray-900 dark:text-gray-200">

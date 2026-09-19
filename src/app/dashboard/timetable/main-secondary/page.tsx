@@ -10,6 +10,7 @@ export default async function BranchTimetablePage({ searchParams }: { searchPara
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
   const userRole = (session.user as { role?: string; permissions?: string[] }).role ?? 'GV';
+  const currentUserId = (session.user as any).id;
   const userPermissions = (session.user as { permissions?: string[] }).permissions ?? [];
   // ADMIN, BGH, Tổ trưởng chuyên môn → được sửa TKB; GV thường → chỉ xem
   const readOnly = !canEditTimetable(userRole, userPermissions);
@@ -71,6 +72,8 @@ export default async function BranchTimetablePage({ searchParams }: { searchPara
         stats={stats} 
         timetableNotes={timetableNotes}
         readOnly={readOnly}
+        userRole={userRole}
+        currentUserId={currentUserId}
       />
     </div>
   );
