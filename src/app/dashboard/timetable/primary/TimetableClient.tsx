@@ -1480,7 +1480,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                             )}
                             <div className="relative z-10 h-full">
                               {normalSlot ? renderSlotUI(normalSlot, isNormalSaving, isOverridden, 'NORMAL') : (
-                                !readOnly && <select
+                                (!readOnly && exportMode === 'IDLE') && <select
                                   className="w-full h-full text-xs p-1 bg-transparent border-none focus:ring-0 text-gray-500 cursor-pointer outline-none hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors rounded !bg-center"
                                   onChange={(e) => { handleAssign(day, period, session, cls.id, e.target.value, 'NORMAL'); e.target.value = ''; }}
                                   value=""
@@ -1502,7 +1502,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                           <td key={subKey} className={`relative border-x-2 border-slate-400 border-r-4 border-r-slate-500 dark:border-slate-500 dark:border-r-slate-400 p-1 ${borderBottomClass} bg-amber-50/40 dark:bg-amber-900/30 align-top ${isFullscreen ? '' : 'min-w-[32px]'} ${!subSlot && !isFullscreen ? 'w-8 max-w-[32px] overflow-hidden' : ''}`}>
                             <div className="relative z-10 h-full flex flex-col justify-center">
                               {subSlot ? renderSlotUI(subSlot, isSubSaving, false, 'SUBSTITUTE') : (
-                                !readOnly && <select
+                                (!readOnly && exportMode === 'IDLE') && <select
                                   className="w-full text-xs p-0 bg-transparent border-none focus:ring-0 text-gray-400 hover:text-amber-600 cursor-pointer outline-none transition-colors rounded text-center appearance-none text-lg font-light"
                                   onChange={(e) => { handleAssign(day, period, session, cls.id, e.target.value, 'SUBSTITUTE'); e.target.value = ''; }}
                                   value=""
