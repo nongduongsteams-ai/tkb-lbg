@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation';
 import { canEditTimetable } from '@/lib/session';
 import { getEffectiveActions, canViewFullTimetable } from '@/lib/serverPermissions';
 
-export default async function BranchTimetablePage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
+export default async function PrimaryBranchTimetablePage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
   const userRole = (session.user as { role?: string; permissions?: string[] }).role ?? 'GV';
@@ -18,7 +18,7 @@ export default async function BranchTimetablePage({ searchParams }: { searchPara
 
   const resolvedParams = await searchParams;
   const schoolYear = '2026-2027';
-  const branch = 'TH Nghinh Tường';
+  const branch = 'Phân hiệu TH';
   const level = 'PRIMARY';
 
   let weekNumber = 1;
@@ -80,7 +80,7 @@ export default async function BranchTimetablePage({ searchParams }: { searchPara
     <div className="p-6 max-w-[1600px] mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Thời Khoá Biểu TH Nghinh Tường</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Thời Khoá Biểu Phân Hiệu TH</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
             Xếp lịch tuần {weekNumber}
           </p>

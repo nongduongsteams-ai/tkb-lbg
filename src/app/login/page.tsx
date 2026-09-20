@@ -177,7 +177,7 @@ export default function LoginPage() {
               Nông Dưỡng - AI
             </div>
             <p className="text-[10px] font-medium text-zinc-600 m-0">
-              Phiên bản Pro 1.3.5 &copy; 2026
+              Phiên bản Pro 1.3.6 &copy; 2026
             </p>
           </div>
         </div>

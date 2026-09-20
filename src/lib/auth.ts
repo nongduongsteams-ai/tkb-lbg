@@ -45,10 +45,22 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const u = user as { id: string; role: Role; permissions?: string[] };
-        token.role = u.role;
-        token.id = u.id;
-        token.permissions = u.permissions ?? [];
+        token.id = user.id;
+      }
+      // Luôn cập nhật quyền mới nhất từ DB để tránh lỗi session cũ
+      if (token.id) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { role: true, permissions: true }
+          });
+          if (dbUser) {
+            token.role = dbUser.role;
+            token.permissions = dbUser.permissions;
+          }
+        } catch (error) {
+          console.error("JWT fetch DB error:", error);
+        }
       }
       return token;
     },

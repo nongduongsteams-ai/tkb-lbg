@@ -9,6 +9,7 @@ interface Props {
   initialData: SchoolPlan[];
   schoolYear: string;
   supportedGrades: number[];
+  isFullAccess?: boolean;
 }
 
 type GradeData = {
@@ -34,7 +35,7 @@ const createEmptyMatrix = (supportedGrades: number[]): MatrixPlan => {
   return matrix;
 };
 
-export default function SchoolPlanClient({ initialData, schoolYear, supportedGrades }: Props) {
+export default function SchoolPlanClient({ initialData, schoolYear, supportedGrades, isFullAccess = false }: Props) {
   const [matrices, setMatrices] = useState<MatrixPlan[]>([]);
   const [filterSubject, setFilterSubject] = useState("");
   const [isEditing, setIsEditing] = useState<string | null>(null); // old subjectName
@@ -213,9 +214,11 @@ export default function SchoolPlanClient({ initialData, schoolYear, supportedGra
             <button onClick={() => handleEdit(matrix)} className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 p-2 rounded-lg transition-colors" title="Sửa">
               <Edit2 size={18} />
             </button>
-            <button onClick={() => handleDelete(matrix.subjectName)} className="text-red-600 hover:text-red-900 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Xóa">
-              <Trash2 size={18} />
-            </button>
+            {isFullAccess && (
+              <button onClick={() => handleDelete(matrix.subjectName)} className="text-red-600 hover:text-red-900 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Xóa">
+                <Trash2 size={18} />
+              </button>
+            )}
           </div>
         </td>
       </tr>
@@ -240,17 +243,19 @@ export default function SchoolPlanClient({ initialData, schoolYear, supportedGra
           />
         </div>
 
-        <button
-          onClick={() => {
-            setIsEditing(null);
-            setIsAdding(true);
-            setFormData(createEmptyMatrix(supportedGrades));
-          }}
-          className="flex items-center gap-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold transition-all shadow-md hover:shadow-lg whitespace-nowrap"
-          style={{ padding: '10px 24px' }}
-        >
-          <Plus size={20} /> Thêm môn học
-        </button>
+        {isFullAccess && (
+          <button
+            onClick={() => {
+              setIsEditing(null);
+              setIsAdding(true);
+              setFormData(createEmptyMatrix(supportedGrades));
+            }}
+            className="flex items-center gap-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold transition-all shadow-md hover:shadow-lg whitespace-nowrap"
+            style={{ padding: '10px 24px' }}
+          >
+            <Plus size={20} /> Thêm môn học
+          </button>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -337,9 +342,11 @@ export default function SchoolPlanClient({ initialData, schoolYear, supportedGra
                 <td colSpan={15} className="px-4 py-12 text-center">
                   <div className="flex flex-col items-center justify-center text-gray-400">
                     <p className="mt-2 text-sm font-medium">Chưa có kế hoạch giáo dục nào</p>
-                    <button onClick={() => setIsAdding(true)} className="mt-3 text-indigo-600 hover:underline text-sm">
-                      Tạo kế hoạch đầu tiên
-                    </button>
+                    {isFullAccess && (
+                      <button onClick={() => setIsAdding(true)} className="mt-3 text-indigo-600 hover:underline text-sm">
+                        Tạo kế hoạch đầu tiên
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

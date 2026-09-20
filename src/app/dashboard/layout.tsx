@@ -40,6 +40,7 @@ export default function DashboardLayout({
       {/* Floating Dual-Dock Sidebar (Untitled UI Style) */}
       <Sidebar 
         userRole={session.user.role as string}
+        userPermissions={(session.user as any).permissions || []}
         userName={session.user.name ?? undefined}
         userEmail={session.user.email ?? undefined}
         isCollapsed={isSidebarCollapsed}

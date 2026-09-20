@@ -1,12 +1,11 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
-async function check() {
-  const users = await prisma.user.findMany();
-  for (const u of users) {
-    if (["Mai Tuấn Khương", "Nguyễn Thị Minh", "Hoàng Liên Sơn"].includes(u.name)) {
-      console.log(u.name, u.permissions);
-    }
-  }
+async function main() {
+  const users = await prisma.user.findMany({
+    select: { id: true, name: true, role: true, permissions: true }
+  });
+  console.log(JSON.stringify(users, null, 2));
 }
-check().finally(() => prisma.$disconnect());
+
+main().catch(console.error).finally(() => prisma.$disconnect());

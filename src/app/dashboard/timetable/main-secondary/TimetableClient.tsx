@@ -30,6 +30,14 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
   const [isSyncing, setIsSyncing] = useState(false);
   const [importResults, setImportResults] = useState<any>(null);
 
+  // Substitute modal state
+  const [pendingSubstitute, setPendingSubstitute] = useState<{
+    day: number, period: number, session: 'SANG' | 'CHIEU', classId: string, assignmentId: string
+  } | null>(null);
+  const [substituteType, setSubstituteType] = useState<'LAP_GIO' | 'DAY_THAY'>('DAY_THAY');
+  const [substituteNote, setSubstituteNote] = useState('');
+  const [customSubstituteName, setCustomSubstituteName] = useState('');
+
   // Đồng bộ khi props thay đổi (chuyển tuần)
   useEffect(() => {
     setLocalSlots(initialSlots);
@@ -717,7 +725,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
     rolloverWeek(weekNumber, weekNumber + 1, '2026-2027', branch, level)
       .then(res => {
         if (res.success) {
-          router.push(`/dashboard/timetable/branch?week=${weekNumber + 1}`);
+          router.push(`/dashboard/timetable/main-secondary?week=${weekNumber + 1}`);
         } else {
           setRolloverPending(false);
           alert('Lỗi: ' + res.error);
@@ -1201,7 +1209,37 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
               >
                 ← Tuần trước
               </button>
-              <span className="self-center font-bold text-lg px-3 bg-blue-50 text-blue-800 rounded dark:bg-blue-900/50 dark:text-blue-200" style={{ padding: '4px 12px' }}>Tuần {weekNumber}</span>
+              <div className="flex items-center self-center bg-blue-50 text-blue-800 rounded dark:bg-blue-900/50 dark:text-blue-200 px-2" style={{ padding: '4px 8px' }}>
+                <span className="font-bold text-lg mr-1">Tuần</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={52}
+                  key={weekNumber}
+                  defaultValue={weekNumber}
+                  className="font-bold text-lg bg-transparent w-12 text-center border-b-2 border-transparent hover:border-blue-300 focus:border-blue-500 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  style={{ MozAppearance: 'textfield' }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt((e.target as HTMLInputElement).value);
+                      if (val && val > 0 && val !== weekNumber) {
+                        setSavingCells(new Set());
+                        router.push(`/dashboard/timetable/main-secondary?week=${val}`);
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (val && val > 0 && val !== weekNumber) {
+                      setSavingCells(new Set());
+                      router.push(`/dashboard/timetable/main-secondary?week=${val}`);
+                    } else {
+                      e.target.value = weekNumber.toString();
+                    }
+                  }}
+                  title="Nhập số tuần và ấn Enter để chuyển"
+                />
+              </div>
               <button
                 disabled={isNavigatingWeek}
                 onClick={() => {
@@ -1216,7 +1254,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => router.push(`/dashboard/timetable/branch/detailed?week=${weekNumber}`)}
+                onClick={() => router.push(`/dashboard/timetable/main-secondary/detailed?week=${weekNumber}`)}
                 className="bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
                 style={{ padding: '8px 16px', backgroundColor: '#2563eb', color: 'white' }}
               >
@@ -1385,14 +1423,25 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                       {classes.flatMap((cls: any) => {
                         const normalSlot = getSlot(day, period, session, cls.id, 'NORMAL');
                         const subSlot = getSlot(day, period, session, cls.id, 'SUBSTITUTE');
-                        const clsAssignments = assignments.filter((a: any) => a.classId === cls.id);
+                        const clsAssignments = assignments
+                          .filter((a: any) => a.classId === cls.id)
+                          .sort((a: any, b: any) => {
+                            const nameA = a.teacher.name.split(' ').pop() || '';
+                            const nameB = b.teacher.name.split(' ').pop() || '';
+                            if (nameA === nameB) return formatSubjectName(a.subject.name).localeCompare(formatSubjectName(b.subject.name), 'vi');
+                            return nameA.localeCompare(nameB, 'vi');
+                          });
                         
                         const normalKey = `${day}-${session}-${period}-${cls.id}-NORMAL`;
                         const subKey = `${day}-${session}-${period}-${cls.id}-SUBSTITUTE`;
                         const isNormalSaving = savingCells.has(normalKey);
                         const isSubSaving = savingCells.has(subKey);
                         
-                        const isOverridden = !!subSlot;
+                        const cellNoteData = localCellNotes.find((n: any) => n.classId === cls.id && n.dayOfWeek === day && n.period === period && n.session === session);
+                        const isDayThayCustom = cellNoteData?.content.startsWith('[DAY_THAY] ');
+                        const isLapGioCustom = cellNoteData?.content.startsWith('[LAP_GIO] ');
+
+                        const isOverridden = !!subSlot || isDayThayCustom || isLapGioCustom;
 
                         const renderSlotUI = (slot: any, isSaving: boolean, isOverridden: boolean, status: 'NORMAL' | 'SUBSTITUTE') => {
                           const isHighlightedSubject = (hoveredItem?.type === 'subject' && hoveredItem.value === slot.assignment.subject.name) ||
@@ -1528,11 +1577,12 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                             <div className="relative z-10 h-full">
                               {(() => {
                                 const cellNote = localCellNotes.find((n: any) => n.classId === cls.id && n.dayOfWeek === day && n.period === period && n.session === session);
-                                if (cellNote) {
+                                if (cellNote && !cellNote.content.startsWith('[DAY_THAY] ')) {
+                                  const displayContent = cellNote.content.startsWith('[LAP_GIO] ') ? cellNote.content.replace('[LAP_GIO] ', '') : cellNote.content;
                                   return (
                                     <div className="relative w-full h-full flex items-center justify-center p-1 group">
                                       <span className="font-bold text-sm text-black whitespace-pre-wrap break-words text-center" style={{ color: '#000000' }}>
-                                        {cellNote.content}
+                                        {displayContent}
                                       </span>
                                       {!readOnly && exportMode === 'IDLE' && (
                                         <button
@@ -1547,7 +1597,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                                   );
                                 }
                                 return normalSlot ? renderSlotUI(normalSlot, isNormalSaving, isOverridden, 'NORMAL') : (
-                                  <div className="w-full h-full flex flex-col items-center justify-center group gap-0.5">
+                                  <div className="w-full h-full flex flex-col items-center justify-center group gap-0.5 relative">
                                     {(!readOnly && exportMode === 'IDLE') && (
                                       <>
                                         <select
@@ -1565,7 +1615,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                                         <input
                                           type="text"
                                           placeholder="Tùy chỉnh..."
-                                          className="w-[90%] text-[10px] p-0.5 bg-gray-50 border border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded text-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity absolute bottom-1"
+                                          className="absolute bottom-0.5 left-0.5 right-5 w-auto text-[10px] p-0.5 bg-gray-50 border border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded text-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity z-10"
                                           onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                               handleSaveCellNote(day, period, session, cls.id, e.currentTarget.value);
@@ -1593,19 +1643,45 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                           <td key={subKey} className={`relative border-x-2 border-slate-400 border-r-4 border-r-slate-500 dark:border-slate-500 dark:border-r-slate-400 p-1 ${borderBottomClass} bg-amber-50/40 dark:bg-amber-900/30 align-top ${isFullscreen ? '' : 'min-w-[32px]'} ${!subSlot && !isFullscreen ? 'w-8 max-w-[32px] overflow-hidden' : ''}`}>
                             <div className="relative z-10 h-full flex flex-col justify-center">
                               {subSlot ? renderSlotUI(subSlot, isSubSaving, false, 'SUBSTITUTE') : (
+                                cellNoteData && cellNoteData.content.startsWith('[DAY_THAY] ') ? (
+                                  <div className="relative w-full h-full flex items-center justify-center p-1 group min-h-[32px]">
+                                    <span className="font-bold text-xs whitespace-pre-wrap break-words text-center" style={{ color: colors.substitute }}>
+                                      {cellNoteData.content.replace('[DAY_THAY] ', '')}
+                                    </span>
+                                    {!readOnly && exportMode === 'IDLE' && (
+                                      <button
+                                        className="absolute top-0 right-0 hidden group-hover:flex w-5 h-5 bg-red-500 text-white rounded-bl items-center justify-center text-xs opacity-80 hover:opacity-100 transition-opacity z-10"
+                                        onClick={(e) => handleDeleteCellNote(day, period, session, cls.id, e)}
+                                        title="Xóa người dạy thay"
+                                      >
+                                        &times;
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
                                 (!readOnly && exportMode === 'IDLE') && <select
                                   className="w-full text-xs p-0 bg-transparent border-none focus:ring-0 text-gray-400 hover:text-amber-600 cursor-pointer outline-none transition-colors rounded text-center appearance-none text-lg font-light"
-                                  onChange={(e) => { handleAssign(day, period, session, cls.id, e.target.value, 'SUBSTITUTE'); e.target.value = ''; }}
+                                  onChange={(e) => { 
+                                    if(e.target.value) {
+                                      setPendingSubstitute({ day, period, session: session as 'SANG' | 'CHIEU', classId: cls.id, assignmentId: e.target.value });
+                                      setSubstituteNote('');
+                                      setCustomSubstituteName('');
+                                      setSubstituteType('DAY_THAY');
+                                      e.target.value = ''; 
+                                    }
+                                  }}
                                   value=""
                                   title="Thêm tiết điều chỉnh (thay thế)"
                                 >
                                   <option value="" disabled>+</option>
+                                  <option value="CUSTOM" className="font-bold text-blue-600">-- Nhập tay --</option>
                                   {clsAssignments.map((a: any) => (
                                     <option key={a.id} value={a.id}>
                                       {formatSubjectName(a.subject.name)} ({a.teacher.name.split(' ').pop()})
                                     </option>
                                   ))}
                                 </select>
+                                )
                               )}
                             </div>
                           </td>
@@ -1802,6 +1878,141 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                 style={{ padding: '10px 24px' }}
               >
                 Xong
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tùy chọn Lấp giờ / Dạy thay Modal */}
+      {pendingSubstitute && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/80" style={{ padding: '16px 24px' }}>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                Thay đổi phân công
+              </h3>
+              <button 
+                onClick={() => setPendingSubstitute(null)} 
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1"
+              >
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto" style={{ padding: '24px' }}>
+              {pendingSubstitute.assignmentId === 'CUSTOM' ? (
+                <div className="mb-4 space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">Nhập tên Giáo viên (hoặc môn học):</label>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={customSubstituteName}
+                    onChange={(e) => setCustomSubstituteName(e.target.value)}
+                    placeholder="VD: Phó CN Hường..."
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none p-3 font-medium"
+                  />
+                </div>
+              ) : (
+                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-lg text-sm font-medium">
+                  Giáo viên thay thế: <strong>{assignments.find((a: any) => a.id === pendingSubstitute.assignmentId)?.teacher?.name}</strong>
+                </div>
+              )}
+
+              <div className="space-y-3 mb-6">
+                <label className="flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-700">
+                  <input 
+                    type="radio" 
+                    name="subType"
+                    checked={substituteType === 'DAY_THAY'}
+                    onChange={() => setSubstituteType('DAY_THAY')}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="font-bold text-gray-800 dark:text-gray-200">Dạy thay</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Giáo viên gốc vẫn được tính tiết, người dạy thay được thêm vào.</div>
+                  </div>
+                </label>
+                
+                <label className="flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-700">
+                  <input 
+                    type="radio" 
+                    name="subType"
+                    checked={substituteType === 'LAP_GIO'}
+                    onChange={() => setSubstituteType('LAP_GIO')}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="font-bold text-orange-600 dark:text-orange-400">Lấp giờ</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Ghi đè hoàn toàn. Giáo viên gốc bị mất tiết này.</div>
+                  </div>
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Ghi chú thêm (Tùy chọn)</label>
+                <input 
+                  type="text" 
+                  value={substituteNote}
+                  onChange={(e) => setSubstituteNote(e.target.value)}
+                  placeholder="VD: Dạy bù bài 5, Kiểm tra 15p..."
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  style={{ padding: '10px 12px' }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const { day, period, session, classId, assignmentId } = pendingSubstitute;
+                      if (assignmentId === 'CUSTOM') {
+                        if (!customSubstituteName.trim()) {
+                          alert("Vui lòng nhập tên người dạy thay!");
+                          return;
+                        }
+                        const finalContent = substituteType === 'DAY_THAY' 
+                          ? `[DAY_THAY] ${customSubstituteName.trim()}${substituteNote.trim() ? ' - ' + substituteNote.trim() : ''}`
+                          : `[LAP_GIO] ${customSubstituteName.trim()}${substituteNote.trim() ? ' - ' + substituteNote.trim() : ''}`;
+                        handleSaveCellNote(day, period, session, classId, finalContent);
+                      } else {
+                        handleAssign(day, period, session, classId, assignmentId, substituteType === 'LAP_GIO' ? 'NORMAL' : 'SUBSTITUTE');
+                        if (substituteNote.trim()) {
+                          handleSaveCellNote(day, period, session, classId, substituteNote.trim());
+                        }
+                      }
+                      setPendingSubstitute(null);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800 flex justify-end gap-2" style={{ padding: '16px 24px' }}>
+              <button 
+                onClick={() => setPendingSubstitute(null)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm font-medium rounded-lg transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                onClick={() => {
+                  const { day, period, session, classId, assignmentId } = pendingSubstitute;
+                  if (assignmentId === 'CUSTOM') {
+                    if (!customSubstituteName.trim()) {
+                      alert("Vui lòng nhập tên người dạy thay!");
+                      return;
+                    }
+                    const finalContent = substituteType === 'DAY_THAY' 
+                      ? `[DAY_THAY] ${customSubstituteName.trim()}${substituteNote.trim() ? ' - ' + substituteNote.trim() : ''}`
+                      : `[LAP_GIO] ${customSubstituteName.trim()}${substituteNote.trim() ? ' - ' + substituteNote.trim() : ''}`;
+                    handleSaveCellNote(day, period, session, classId, finalContent);
+                  } else {
+                    handleAssign(day, period, session, classId, assignmentId, substituteType === 'LAP_GIO' ? 'NORMAL' : 'SUBSTITUTE');
+                    if (substituteNote.trim()) {
+                      handleSaveCellNote(day, period, session, classId, substituteNote.trim());
+                    }
+                  }
+                  setPendingSubstitute(null);
+                }}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                Xác nhận
               </button>
             </div>
           </div>

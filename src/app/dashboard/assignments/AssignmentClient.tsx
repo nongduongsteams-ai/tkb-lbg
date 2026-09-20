@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Trash2, Upload, Search, Download, AlertCircle, FileText, Edit2, X, Check as CheckIcon, ChevronDown, Bot, Copy } from "lucide-react";
 import { createAssignment, createAssignments, deleteAssignment, importAssignmentsFromMarkdown, updateAssignment } from "@/actions/assignment";
 import * as XLSX from 'xlsx';
@@ -31,6 +31,48 @@ export default function AssignmentClient({
   const [inlineFormData, setInlineFormData] = useState<{ subjectName: string, classIds: string[], roleNote: string }>({ subjectName: "", classIds: [], roleNote: "" });
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [isMissingModalOpen, setIsMissingModalOpen] = useState(false);
+  const [missingData, setMissingData] = useState<{className: string; missingSubjects: string[]}[]>([]);
+  
+  // Draggable widget states
+  const [position, setPosition] = useState({ x: window.innerWidth - 320 - 20, y: 80 }); // Top-right by default
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    // Nếu màn hình quá nhỏ hoặc đang load bên SSR thì set default hợp lý
+    if (typeof window !== 'undefined') {
+      setPosition({ x: Math.max(20, window.innerWidth - 320 - 20), y: 80 });
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+      }
+    };
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    } else {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragStart]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+  };
   
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -199,6 +241,38 @@ export default function AssignmentClient({
     setIsSubmitting(false);
   };
 
+  const handleCheckMissing = () => {
+    const missing: {className: string; missingSubjects: string[]}[] = [];
+
+    classes.forEach(cls => {
+      // Lấy tên các môn học yêu cầu của khối
+      const requiredSubjects = subjects
+        .filter(s => s.grade === cls.grade)
+        .map(s => s.name);
+      
+      // Lấy tên các môn học đã phân công cho lớp
+      const assignedSubjects = assignments
+        .filter((a: any) => a.classId === cls.id)
+        .map((a: any) => a.subject?.name);
+      
+      // So sánh theo TÊN môn học (vì lúc import có thể id bị gán nhầm khối do trùng tên)
+      const missingForClass = requiredSubjects.filter(name => !assignedSubjects.includes(name));
+      
+      if (missingForClass.length > 0) {
+        missing.push({
+          className: cls.name,
+          missingSubjects: missingForClass
+        });
+      }
+    });
+
+    // Sắp xếp theo tên lớp
+    missing.sort((a, b) => a.className.localeCompare(b.className));
+    
+    setMissingData(missing);
+    setIsMissingModalOpen(true);
+  };
+
   // Lọc theo GV
   const filteredTeachers = teachers.filter((t: any) => {
     const teacherAssignments = assignments.filter((a: any) => a.teacherId === t.id);
@@ -245,6 +319,13 @@ export default function AssignmentClient({
             style={{ padding: '10px 20px' }}
           >
             <Plus size={18} /> Thêm phân công
+          </button>
+          <button 
+            onClick={handleCheckMissing}
+            className="bg-orange-100 text-orange-700 border border-orange-200 rounded-xl hover:bg-orange-200 font-semibold shadow-sm transition-all flex items-center gap-2 whitespace-nowrap"
+            style={{ padding: '10px 16px' }}
+          >
+            <AlertCircle size={18} /> Rà soát thiếu
           </button>
           <button 
             onClick={() => setIsGuideModalOpen(true)}
@@ -612,6 +693,65 @@ Dữ liệu thô của tôi là:
                 </pre>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Kiểm tra phân công thiếu */}
+      {/* Widget Kiểm tra phân công thiếu dạng nổi (Floating Draggable Widget) */}
+      {isMissingModalOpen && (
+        <div 
+          style={{ left: position.x, top: position.y }}
+          className="fixed z-[9999] w-80 bg-white/95 backdrop-blur-md border border-orange-200 shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[70vh]"
+        >
+          {/* Header (Drag Handle) */}
+          <div 
+            onMouseDown={handleMouseDown}
+            className="bg-gradient-to-r from-orange-50 to-orange-100 border-b border-orange-200 px-4 py-3 cursor-move flex justify-between items-center select-none"
+          >
+            <h3 className="text-sm font-extrabold text-orange-900 flex items-center gap-1.5 tracking-tight">
+              <AlertCircle size={16} className="text-orange-600"/> 
+              RÀ SOÁT PHÂN CÔNG
+            </h3>
+            <button 
+              onClick={() => setIsMissingModalOpen(false)} 
+              className="text-orange-400 hover:text-red-500 hover:bg-orange-200/50 p-1 rounded-md transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-4 text-[12px]">
+            {missingData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center text-emerald-600">
+                <CheckIcon size={24} className="mb-2" />
+                <span className="font-bold text-sm">Tuyệt vời! Đã đủ phân công.</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="bg-orange-50 text-orange-800 text-xs px-3 py-2 rounded-lg mb-4 font-medium border border-orange-100">
+                  Phát hiện <strong>{missingData.length}</strong> lớp thiếu phân công
+                </div>
+                {missingData.map((item, idx) => (
+                  <div key={idx} className="border border-red-100 rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-red-50 text-red-800 font-bold px-3 py-2 flex justify-between items-center border-b border-red-100">
+                      <span>Lớp {item.className}</span>
+                      <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full">
+                        Thiếu {item.missingSubjects.length}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-white flex flex-wrap gap-1.5">
+                      {item.missingSubjects.map((sub, sIdx) => (
+                        <span key={sIdx} className="bg-gray-50 border border-gray-200 text-gray-700 px-2 py-1 rounded text-[11px] font-medium">
+                          {sub}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -77,6 +77,8 @@ export default function BranchClient({ initialClasses, initialTeachers }: { init
                     >
                       <option value="Trường chính">Trường chính</option>
                       <option value="Phân hiệu">Phân hiệu (Điểm trường lẻ)</option>
+                      <option value="TH Nghinh Tường">TH Nghinh Tường</option>
+                      <option value="Phân hiệu TH">Phân hiệu TH Nghinh Tường</option>
                     </select>
                   </td>
                 </tr>
@@ -109,6 +111,8 @@ export default function BranchClient({ initialClasses, initialTeachers }: { init
                     >
                       <option value="Trường chính">Trường chính</option>
                       <option value="Phân hiệu">Phân hiệu (Điểm trường lẻ)</option>
+                      <option value="TH Nghinh Tường">TH Nghinh Tường</option>
+                      <option value="Phân hiệu TH">Phân hiệu TH Nghinh Tường</option>
                       <option value="Cả hai">Dạy cả hai cơ sở</option>
                     </select>
                   </td>

@@ -10,6 +10,7 @@ interface Props {
   generalPlans: SchoolPlan[];
   schoolYear: string;
   userRole?: string;
+  isFullAccess?: boolean;
 }
 
 interface PlanRow {
@@ -38,7 +39,7 @@ function getParentSubject(subName: string): string {
   return subName; // Return original if no special rule
 }
 
-export default function DetailedPlanClient({ initialWeeklyPlans, generalPlans, schoolYear, userRole }: Props) {
+export default function DetailedPlanClient({ initialWeeklyPlans, generalPlans, schoolYear, userRole, isFullAccess = false }: Props) {
   const [rows, setRows] = useState<PlanRow[]>([]);
   const [semester, setSemester] = useState<1 | 2>(1);
   const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -241,7 +242,7 @@ export default function DetailedPlanClient({ initialWeeklyPlans, generalPlans, s
               </select>
             </div>
             
-            {userRole !== 'GV' && (
+            {isFullAccess && (
               <button
                 onClick={handleAdd}
                 className="flex items-center gap-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold transition-all shadow-md hover:shadow-lg whitespace-nowrap"
@@ -388,7 +389,7 @@ export default function DetailedPlanClient({ initialWeeklyPlans, generalPlans, s
                         <button onClick={() => handleEdit(row)} className="text-indigo-600 hover:text-indigo-800 p-2 hover:bg-indigo-50 rounded-lg transition-colors" title="Sửa">
                           <Edit2 size={18} />
                         </button>
-                        {userRole !== 'GV' && (
+                        {isFullAccess && (
                           <button onClick={() => handleDelete(row)} className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors" title="Xóa">
                             <Trash2 size={18} />
                           </button>

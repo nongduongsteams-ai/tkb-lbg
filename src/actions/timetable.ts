@@ -13,7 +13,7 @@ export async function getBranchTimetable(weekNumber: number, schoolYear: string,
   const classes = await prisma.class.findMany({
     where: { 
       schoolYear, 
-      branch,
+      ...(branch !== 'ALL' ? { branch } : {}),
       ...(level === 'PRIMARY' ? { grade: { lte: 5 } } : {}),
       ...(level === 'SECONDARY' ? { grade: { gte: 6 } } : {})
     },
@@ -233,7 +233,7 @@ export async function getDashboardStats(weekNumber: number, schoolYear: string, 
   const classes = await prisma.class.findMany({ 
     where: { 
       schoolYear, 
-      branch,
+      ...(branch !== 'ALL' ? { branch } : {}),
       ...(level === 'PRIMARY' ? { grade: { lte: 5 } } : {}),
       ...(level === 'SECONDARY' ? { grade: { gte: 6 } } : {})
     },

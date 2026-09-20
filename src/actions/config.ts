@@ -86,3 +86,36 @@ export async function savePreparationDay(day: number) {
     return { success: false, error: error.message };
   }
 }
+
+import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/permissions";
+
+export async function getRolePermissions() {
+  try {
+    const config = await prisma.systemConfig.findUnique({
+      where: { key: "ROLE_PERMISSIONS" }
+    });
+    
+    if (config && config.value) {
+      return JSON.parse(config.value) as Record<string, string[]>;
+    }
+    
+    return DEFAULT_ROLE_PERMISSIONS;
+  } catch (error) {
+    console.error("Lỗi lấy cấu hình phân quyền:", error);
+    return DEFAULT_ROLE_PERMISSIONS;
+  }
+}
+
+export async function saveRolePermissions(mapping: Record<string, string[]>) {
+  try {
+    await prisma.systemConfig.upsert({
+      where: { key: "ROLE_PERMISSIONS" },
+      update: { value: JSON.stringify(mapping) },
+      create: { key: "ROLE_PERMISSIONS", value: JSON.stringify(mapping) },
+    });
+    return { success: true };
+  } catch (error: any) {
+    console.error("Lỗi lưu cấu hình phân quyền:", error);
+    return { success: false, error: error.message };
+  }
+}

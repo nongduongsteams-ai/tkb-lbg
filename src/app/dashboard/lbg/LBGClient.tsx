@@ -100,7 +100,7 @@ export default function LBGClient({ teachers, schoolWeeks, schoolYear, currentUs
       .trim();
   };
 
-  const generateLessonPlanInfo = (weekData: any) => {
+  const generateLessonPlanInfo = (weekData: any, grouped: boolean) => {
     const prepDateStr = calculatePrepDate(weekData.weekInfo.startDate, prepDay);
     const groups = new Map<string, any>();
     
@@ -219,7 +219,23 @@ export default function LBGClient({ teachers, schoolWeeks, schoolYear, currentUs
       const periods = Array.from(group.periods as Set<number>).sort((a, b) => a - b);
       const prepDayName = prepDay === 8 ? 'Chủ nhật' : `Thứ ${prepDay}`;
       
-      let text = `Ngày soạn: ${prepDateStr} (${prepDayName})\nNgày dạy:\n`;
+      const firstPeriodOfLesson = periods[0];
+      let isAlreadyPrepared = false;
+      if (grouped && firstPeriodOfLesson !== undefined) {
+         const minPeriodThisWeek = Math.min(
+           ...weekData.slots
+             .filter((s: any) => s.subjectName === group.subjectName && cleanLessonName(s.lessonName) === group.lessonName)
+             .map((s: any) => s.lessonNum)
+         );
+         if (minPeriodThisWeek > firstPeriodOfLesson) {
+           isAlreadyPrepared = true;
+         }
+      }
+
+      let text = isAlreadyPrepared 
+        ? `Đã soạn từ trước đó\nNgày dạy:\n`
+        : `Ngày soạn: ${prepDateStr} (${prepDayName})\nNgày dạy:\n`;
+        
       sortedClasses.forEach((c: any) => {
          // Lấy danh sách tiết hiện tại trong tuần để xuất text (khi không bật Soạn gộp)
          const actualPeriods = periods.filter(p => {
@@ -232,7 +248,9 @@ export default function LBGClient({ teachers, schoolWeeks, schoolYear, currentUs
          });
        });
       
-      let htmlTable = `<p><strong>Ngày soạn:</strong> ${prepDateStr} (${prepDayName})</p><p><strong>Ngày dạy:</strong></p>`;
+      let htmlTable = isAlreadyPrepared
+        ? `<p><strong style="color: red;">Đã soạn từ trước đó</strong></p><p><strong>Ngày dạy:</strong></p>`
+        : `<p><strong>Ngày soạn:</strong> ${prepDateStr} (${prepDayName})</p><p><strong>Ngày dạy:</strong></p>`;
       htmlTable += `<table border="1" style="border-collapse: collapse; width: 100%;"><thead><tr><th style="padding: 4px; text-align: center;">Lớp</th>`;
       periods.forEach(p => {
         htmlTable += `<th style="padding: 4px; text-align: center;">Tiết ${p}</th>`;
@@ -339,8 +357,31 @@ export default function LBGClient({ teachers, schoolWeeks, schoolYear, currentUs
         { header: "", key: "prep", width: 25 },
       ];
 
-      const startDateStr = format(new Date(weekData.weekInfo.startDate), "dd/MM/yyyy");
-      const endDateStr = format(new Date(weekData.weekInfo.endDate), "dd/MM/yyyy");
+      const getWeekDateRange = (weekInfo: any, slots: any[]) => {
+        let actualStartDate = new Date(weekInfo.startDate);
+        let actualEndDate = new Date(weekInfo.endDate);
+      
+        if (slots && slots.length > 0) {
+          const minDay = Math.min(...slots.map(s => s.dayOfWeek));
+          const maxDay = Math.max(...slots.map(s => s.dayOfWeek));
+          
+          const startOffset = minDay - 2;
+          const endOffset = maxDay - 2;
+          
+          actualStartDate = new Date(weekInfo.startDate);
+          actualStartDate.setDate(actualStartDate.getDate() + startOffset);
+          
+          actualEndDate = new Date(weekInfo.startDate);
+          actualEndDate.setDate(actualEndDate.getDate() + endOffset);
+        }
+      
+        return {
+          startDateStr: format(actualStartDate, "dd/MM/yyyy"),
+          endDateStr: format(actualEndDate, "dd/MM/yyyy")
+        };
+      };
+
+      const { startDateStr, endDateStr } = getWeekDateRange(weekData.weekInfo, weekData.slots || []);
       
       const row1 = sheet.addRow(["TRƯỜNG PTDTBT THCS NGHINH TƯỜNG"]);
       sheet.mergeCells(`A${row1.number}:D${row1.number}`);
@@ -619,8 +660,31 @@ export default function LBGClient({ teachers, schoolWeeks, schoolYear, currentUs
           ) : (
             <div className="space-y-12 max-w-[1200px] mx-auto">
               {lbgData?.weeks.map(weekData => {
-                const startDateStr = format(new Date(weekData.weekInfo.startDate), "dd/MM/yyyy");
-                const endDateStr = format(new Date(weekData.weekInfo.endDate), "dd/MM/yyyy");
+                const getWeekDateRange = (weekInfo: any, slots: any[]) => {
+                  let actualStartDate = new Date(weekInfo.startDate);
+                  let actualEndDate = new Date(weekInfo.endDate);
+                
+                  if (slots && slots.length > 0) {
+                    const minDay = Math.min(...slots.map(s => s.dayOfWeek));
+                    const maxDay = Math.max(...slots.map(s => s.dayOfWeek));
+                    
+                    const startOffset = minDay - 2;
+                    const endOffset = maxDay - 2;
+                    
+                    actualStartDate = new Date(weekInfo.startDate);
+                    actualStartDate.setDate(actualStartDate.getDate() + startOffset);
+                    
+                    actualEndDate = new Date(weekInfo.startDate);
+                    actualEndDate.setDate(actualEndDate.getDate() + endOffset);
+                  }
+                
+                  return {
+                    startDateStr: format(actualStartDate, "dd/MM/yyyy"),
+                    endDateStr: format(actualEndDate, "dd/MM/yyyy")
+                  };
+                };
+                
+                const { startDateStr, endDateStr } = getWeekDateRange(weekData.weekInfo, weekData.slots || []);
                 
                 const structure = buildRenderStructure(weekData.slots || []);
 
@@ -765,7 +829,7 @@ export default function LBGClient({ teachers, schoolWeeks, schoolYear, currentUs
                     
                     {showLessonPlan && (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {generateLessonPlanInfo(weekData).map((group, idx) => (
+                        {generateLessonPlanInfo(weekData, isGroupedPlan).map((group, idx) => (
                           <div key={idx} className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex flex-col shadow-sm ${isGroupedPlan ? 'col-span-1 md:col-span-2 lg:col-span-3' : ''}`}>
                             <div className="bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                               <div className="truncate font-semibold text-indigo-900 dark:text-indigo-200 text-sm" title={`${group.subject} - ${group.lessonName}`}>
@@ -795,7 +859,7 @@ export default function LBGClient({ teachers, schoolWeeks, schoolYear, currentUs
                             </div>
                           </div>
                         ))}
-                      {generateLessonPlanInfo(weekData).length === 0 && (
+                      {generateLessonPlanInfo(weekData, isGroupedPlan).length === 0 && (
                         <div className="col-span-full text-center py-6 text-gray-500 italic">
                           Không có dữ liệu bài dạy.
                         </div>

@@ -3,10 +3,22 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-export async function getSchoolPlans(schoolYear: string) {
+export async function getSchoolPlans(schoolYear: string, userId?: string, isFullAccess: boolean = true) {
   try {
+    let assignedSubjectNames: string[] | undefined;
+    if (!isFullAccess && userId) {
+      const assignments = await prisma.assignment.findMany({
+        where: { teacherId: userId, schoolYear },
+        include: { subject: true }
+      });
+      assignedSubjectNames = Array.from(new Set(assignments.map(a => a.subject.name)));
+    }
+
     const plans = await prisma.schoolPlan.findMany({
-      where: { schoolYear },
+      where: { 
+        schoolYear,
+        ...(assignedSubjectNames ? { subjectName: { in: assignedSubjectNames } } : {})
+      },
       orderBy: [
         { grade: 'asc' },
         { subjectName: 'asc' }

@@ -7,10 +7,12 @@ import { getCurriculums, saveCurriculums } from "@/actions/curriculum";
 
 export default function SubjectClient({ 
   initialSubjects,
-  supportedGrades = [6, 7, 8, 9] 
+  supportedGrades = [6, 7, 8, 9],
+  userActions = []
 }: { 
   initialSubjects: any[];
   supportedGrades?: number[];
+  userActions?: string[];
 }) {
   const [activeTab, setActiveTab] = useState<'subjects' | 'curriculums'>('subjects');
   
@@ -23,6 +25,11 @@ export default function SubjectClient({
   const [selectedGradeFilter, setSelectedGradeFilter] = useState<string>("");
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
   const [lessons, setLessons] = useState<any[]>([]);
+
+  // Everyone can manage subjects they can see in the PPCT tab.
+  // The server already filters the visible subjects based on their assignments.
+  const canManagePPCT = true;
+  const canManageSubjects = userActions.includes('MANAGE_SUBJECTS') || userActions.includes('ADMIN');
   const [loadingCurriculum, setLoadingCurriculum] = useState(false);
   
   const [loading, setLoading] = useState(false);
@@ -42,7 +49,7 @@ export default function SubjectClient({
       if (subject) {
         const result = await getCurriculums(subject.id, subject.grade);
         if (result.success) {
-          setLessons(result.data);
+          setLessons(result.data || []);
         }
       }
       setLoadingCurriculum(false);
@@ -213,8 +220,22 @@ export default function SubjectClient({
         <div className="flex-1 overflow-auto p-6 bg-gray-50">
           <div className="flex justify-between items-center mb-6">
             <h4 className="text-lg font-bold text-gray-800">Danh mục Môn học toàn trường</h4>
-            <div className="text-sm text-gray-500 italic">
-              Đồng bộ tự động từ Kế hoạch nhà trường
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-500 italic">
+                Đồng bộ tự động từ Kế hoạch nhà trường
+              </div>
+              {canManageSubjects && (
+                <button
+                  onClick={() => {
+                    setEditingSubject(null);
+                    setIsSubjectModalOpen(true);
+                  }}
+                  className="bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors"
+                  style={{ padding: '8px 16px' }}
+                >
+                  <Plus size={16} /> Thêm môn học
+                </button>
+              )}
             </div>
           </div>
 
@@ -286,16 +307,18 @@ export default function SubjectClient({
                                       ) : null}
                                     </div>
                                     {/* Action button */}
-                                    <button 
-                                      className="text-gray-400 hover:text-indigo-600 transition-colors"
-                                      title="Cài đặt môn học"
-                                      onClick={() => {
-                                        setEditingSubject(subject);
-                                        setIsSubjectModalOpen(true);
-                                      }}
-                                    >
-                                      <Settings2 size={16} />
-                                    </button>
+                                    {canManageSubjects && (
+                                      <button 
+                                        className="text-gray-400 hover:text-indigo-600 transition-colors"
+                                        title="Cài đặt môn học"
+                                        onClick={() => {
+                                          setEditingSubject(subject);
+                                          setIsSubjectModalOpen(true);
+                                        }}
+                                      >
+                                        <Settings2 size={16} />
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -420,18 +443,22 @@ export default function SubjectClient({
                 >
                   <Download size={18} /> Tải File Mẫu
                 </a>
-                <label className="cursor-pointer bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors" style={{ padding: '10px 20px' }}>
-                  <Upload size={18} /> Nhập từ File
-                  <input type="file" accept=".md,.txt,.pdf,.docx,.xlsx,.xls" className="hidden" onChange={handleFileUpload} disabled={loadingCurriculum} />
-                </label>
-                <button
-                  onClick={handleSaveCurriculum}
-                  disabled={loading}
-                  className="bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50"
-                  style={{ padding: '10px 24px' }}
-                >
-                  <Save size={18} /> Lưu PPCT
-                </button>
+                {canManagePPCT && (
+                  <>
+                    <label className="cursor-pointer bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors" style={{ padding: '10px 20px' }}>
+                      <Upload size={18} /> Nhập từ File
+                      <input type="file" accept=".md,.txt,.pdf,.docx,.xlsx,.xls" className="hidden" onChange={handleFileUpload} disabled={loadingCurriculum} />
+                    </label>
+                    <button
+                      onClick={handleSaveCurriculum}
+                      disabled={loading}
+                      className="bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50"
+                      style={{ padding: '10px 24px' }}
+                    >
+                      <Save size={18} /> Lưu PPCT
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -455,7 +482,7 @@ export default function SubjectClient({
                       <th className="px-6 py-4 text-center w-24">Tiết PPCT</th>
                       <th className="px-6 py-4">Tên bài học</th>
                       <th className="px-6 py-4 w-64">Ghi chú</th>
-                      <th className="px-6 py-4 text-center w-20">Xóa</th>
+                      {canManagePPCT && <th className="px-6 py-4 text-center w-20">Xóa</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -467,7 +494,8 @@ export default function SubjectClient({
                             min="1"
                             value={lesson.lessonNumber}
                             onChange={(e) => handleUpdateLesson(index, 'lessonNumber', e.target.value)}
-                            className="w-full text-center border-transparent bg-transparent rounded-none px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none font-semibold text-indigo-700 transition-colors"
+                            disabled={!canManagePPCT}
+                            className="w-full text-center border-transparent bg-transparent rounded-none px-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none font-semibold text-indigo-700 transition-colors disabled:opacity-100 disabled:cursor-default"
                           />
                         </td>
                         <td className="px-5 py-4">
@@ -475,7 +503,8 @@ export default function SubjectClient({
                             type="text"
                             value={lesson.lessonName}
                             onChange={(e) => handleUpdateLesson(index, 'lessonName', e.target.value)}
-                            className="w-full border-transparent bg-transparent rounded-none px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none text-gray-900 transition-colors"
+                            disabled={!canManagePPCT}
+                            className="w-full border-transparent bg-transparent rounded-none px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none text-gray-900 transition-colors disabled:opacity-100 disabled:cursor-default"
                             placeholder="Nhập tên bài học..."
                           />
                         </td>
@@ -484,39 +513,44 @@ export default function SubjectClient({
                             type="text"
                             value={lesson.note}
                             onChange={(e) => handleUpdateLesson(index, 'note', e.target.value)}
-                            className="w-full border-transparent bg-transparent rounded-none px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none text-gray-600 transition-colors"
+                            disabled={!canManagePPCT}
+                            className="w-full border-transparent bg-transparent rounded-none px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:bg-white outline-none text-gray-600 transition-colors disabled:opacity-100 disabled:cursor-default"
                             placeholder="Ghi chú (VD: 02 tiết)..."
                           />
                         </td>
-                        <td className="px-5 py-4 text-center">
-                          <button
-                            onClick={() => handleRemoveLesson(index)}
-                            className="text-red-500 hover:text-red-700 transition-colors p-2.5 rounded-xl hover:bg-red-50"
-                          >
-                            <Trash2 size={20} />
-                          </button>
-                        </td>
+                        {canManagePPCT && (
+                          <td className="px-5 py-4 text-center">
+                            <button
+                              onClick={() => handleRemoveLesson(index)}
+                              className="text-red-500 hover:text-red-700 transition-colors p-2.5 rounded-xl hover:bg-red-50"
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                     
                     {lessons.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                        <td colSpan={canManagePPCT ? 4 : 3} className="px-6 py-12 text-center text-gray-500">
                           Chưa có tiết PPCT nào. Hãy thêm thủ công hoặc Import từ file Markdown.
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
-                <div className="p-6 bg-gray-50 border-t border-gray-200">
-                  <button
-                    onClick={handleAddLesson}
-                    className="flex items-center gap-2 text-indigo-600 font-semibold hover:text-indigo-800 transition-colors rounded-xl hover:bg-indigo-100 border border-transparent hover:border-indigo-200"
-                    style={{ padding: '10px 20px' }}
-                  >
-                    <Plus size={20} /> Thêm tiết mới
-                  </button>
-                </div>
+                {canManagePPCT && (
+                  <div className="p-6 bg-gray-50 border-t border-gray-200">
+                    <button
+                      onClick={handleAddLesson}
+                      className="flex items-center gap-2 text-indigo-600 font-semibold hover:text-indigo-800 transition-colors rounded-xl hover:bg-indigo-100 border border-transparent hover:border-indigo-200"
+                      style={{ padding: '10px 20px' }}
+                    >
+                      <Plus size={20} /> Thêm tiết mới
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

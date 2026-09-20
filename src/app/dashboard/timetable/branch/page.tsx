@@ -5,19 +5,22 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { canEditTimetable } from '@/lib/session';
+import { getEffectiveActions, canViewFullTimetable } from '@/lib/serverPermissions';
 
 export default async function BranchTimetablePage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
   const userRole = (session.user as { role?: string; permissions?: string[] }).role ?? 'GV';
   const currentUserId = (session.user as any).id;
-  const userPermissions = (session.user as { permissions?: string[] }).permissions ?? [];
-  const readOnly = !canEditTimetable(userRole, userPermissions);
+  const effectiveActions = await getEffectiveActions(session);
+  
+  const isFullAccess = await canViewFullTimetable(session, effectiveActions);
+  const readOnly = !(effectiveActions.has("ADMIN") || effectiveActions.has("MANAGE_TIMETABLE"));
 
   const resolvedParams = await searchParams;
   const schoolYear = '2026-2027'; // Should be dynamic in real app
   const branch = 'Phân hiệu';
-  const level = 'ALL';
+  const level = 'SECONDARY';
 
   let weekNumber = 1;
   if (resolvedParams.week) {
@@ -49,6 +52,31 @@ export default async function BranchTimetablePage({ searchParams }: { searchPara
     })
   ]);
 
+  let filteredAssignments = assignments;
+  let filteredClasses = classes;
+  let filteredSlots = slots;
+
+  let filteredStats = stats;
+
+  if (!isFullAccess) {
+    filteredAssignments = assignments.filter((a: any) => a.teacherId === currentUserId);
+    const teacherAssignments = new Set(filteredAssignments.map((a: any) => `${a.class?.name || a.classId}_${a.subject?.name}`));
+    
+    // Grid (slots, classes) should NOT be filtered so everyone sees the full timetable
+    filteredClasses = classes;
+    filteredSlots = slots;
+    
+    // Stats (Control Panel) should ONLY show subjects assigned to the current teacher
+    filteredStats = stats.map((classStat: any) => {
+      return {
+        ...classStat,
+        subjects: classStat.subjects.filter((sub: any) => 
+          teacherAssignments.has(`${classStat.className}_${sub.subjectName}`)
+        )
+      };
+    }).filter((classStat: any) => classStat.subjects.length > 0);
+  }
+
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -65,14 +93,14 @@ export default async function BranchTimetablePage({ searchParams }: { searchPara
         weekNumber={weekNumber} 
         schoolYear={schoolYear}
         schoolWeek={schoolWeek}
-        classes={classes} 
-        assignments={assignments} 
-        slots={slots} 
-        stats={stats} 
+        classes={filteredClasses} 
+        assignments={filteredAssignments} 
+        slots={filteredSlots} 
+        stats={filteredStats} 
         timetableNotes={timetableNotes}
         timetableCellNotes={timetableCellNotes}
         readOnly={readOnly}
-        userRole={userRole}
+        userRole={isFullAccess ? "ADMIN" : "GV"}
         currentUserId={currentUserId}
       />
     </div>

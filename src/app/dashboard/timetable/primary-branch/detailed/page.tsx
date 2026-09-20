@@ -16,11 +16,9 @@ export default async function DetailedTimetablePage({ searchParams }: { searchPa
   const resolvedParams = await searchParams;
   const weekNumber = resolvedParams.week ? parseInt(resolvedParams.week) : 1;
   const schoolYear = '2026-2027'; 
-  const branch = 'Trường chính';
-  const level = 'SECONDARY';
   
   const [{ classes, assignments, slots, weeklyPlans, schoolPlans }, schoolWeek] = await Promise.all([
-    getBranchTimetable(weekNumber, schoolYear, branch, level),
+    getBranchTimetable(weekNumber, schoolYear, "Phân hiệu TH", "PRIMARY"),
     prisma.schoolWeek.findUnique({
       where: { schoolYear_weekNumber: { schoolYear, weekNumber } }
     })

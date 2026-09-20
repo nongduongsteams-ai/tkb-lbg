@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireAction } from "@/lib/serverPermissions";
 
 export async function getCurriculums(subjectId: string, grade: number) {
   try {
@@ -22,6 +23,7 @@ export async function getCurriculums(subjectId: string, grade: number) {
 
 export async function saveCurriculums(subjectId: string, grade: number, lessons: { lessonNumber: number; lessonName: string; note: string }[]) {
   try {
+    await requireAction("MANAGE_PPCT");
     // Để an toàn và đồng bộ, ta xóa toàn bộ PPCT cũ của Subject + Grade này và tạo lại
     await prisma.$transaction(async (tx) => {
       await tx.curriculum.deleteMany({

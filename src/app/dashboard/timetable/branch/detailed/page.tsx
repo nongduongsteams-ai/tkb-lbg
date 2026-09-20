@@ -4,12 +4,14 @@ import DetailedClient from './DetailedClient';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { getEffectiveActions, canViewFullTimetable } from '@/lib/serverPermissions';
 
 export default async function DetailedTimetablePage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
-  const userRole = (session.user as { role?: string; permissions?: string[] }).role ?? 'GV';
   const currentUserId = (session.user as any).id;
+  const effectiveActions = await getEffectiveActions(session);
+  const isFullAccess = await canViewFullTimetable(session, effectiveActions);
 
   const resolvedParams = await searchParams;
   const weekNumber = resolvedParams.week ? parseInt(resolvedParams.week) : 1;
@@ -28,7 +30,7 @@ export default async function DetailedTimetablePage({ searchParams }: { searchPa
   let filteredClasses = classes;
   let filteredSlots = slots;
 
-  if (userRole === 'GV') {
+  if (!isFullAccess) {
     filteredAssignments = assignments.filter(a => a.teacherId === currentUserId);
     const teacherClassIds = new Set(filteredAssignments.map(a => a.classId));
     filteredClasses = classes.filter(c => teacherClassIds.has(c.id));
@@ -45,7 +47,7 @@ export default async function DetailedTimetablePage({ searchParams }: { searchPa
         slots={filteredSlots}
         weeklyPlans={weeklyPlans}
         schoolPlans={schoolPlans}
-        userRole={userRole}
+        userRole={isFullAccess ? "ADMIN" : "GV"}
       />
     </div>
   );

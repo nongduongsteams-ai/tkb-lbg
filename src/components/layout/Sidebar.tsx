@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -25,22 +25,26 @@ import { signOut } from "next-auth/react";
 
 interface SidebarProps {
   userRole: string;
+  userPermissions: string[];
   userName?: string;
   userEmail?: string;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
 }
 
+import { SystemAction } from "@/lib/permissions";
+
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
-  roles: string[];
+  roles?: string[];
+  actions?: SystemAction[];
   badge?: string | number;
   subItems?: NavItem[];
 }
 
-const navData = [
+const navData: { title: string; items: NavItem[] }[] = [
   {
     title: "Chung",
     items: [
@@ -49,10 +53,11 @@ const navData = [
         label: "Kế hoạch trường", 
         href: "/dashboard/school-plan", 
         icon: BookOpen, 
-        roles: ["ADMIN", "BGH"],
+        actions: ["MANAGE_SCHOOL_PLAN"],
+        roles: ["ADMIN", "BGH", "GV"],
         subItems: [
-          { label: "Kế hoạch chung", href: "/dashboard/school-plan", icon: BookOpen, roles: ["ADMIN", "BGH"] },
-          { label: "Kế hoạch chi tiết", href: "/dashboard/school-plan-detailed", icon: ClipboardList, roles: ["ADMIN", "BGH"] },
+          { label: "Kế hoạch chung", href: "/dashboard/school-plan", icon: BookOpen, actions: ["MANAGE_SCHOOL_PLAN"], roles: ["ADMIN", "BGH", "GV"] },
+          { label: "Kế hoạch chi tiết", href: "/dashboard/school-plan-detailed", icon: ClipboardList, actions: ["MANAGE_SCHOOL_PLAN"], roles: ["ADMIN", "BGH", "GV"] },
         ]
       },
     ]
@@ -60,8 +65,8 @@ const navData = [
   {
     title: "Quản lý danh mục",
     items: [
-      { label: "Giáo viên", href: "/dashboard/teachers", icon: Users, roles: ["ADMIN", "BGH"] },
-      { label: "Môn học & PPCT", href: "/dashboard/subjects", icon: Layers, roles: ["ADMIN", "BGH"] },
+      { label: "Giáo viên", href: "/dashboard/teachers", icon: Users, actions: ["MANAGE_USERS"] },
+      { label: "Môn học & PPCT", href: "/dashboard/subjects", icon: Layers, actions: ["MANAGE_SUBJECTS", "MANAGE_PPCT"] },
       { label: "Lớp học", href: "/dashboard/classes", icon: School, roles: ["ADMIN", "BGH"] },
       { label: "Cơ sở / Phân hiệu", href: "/dashboard/branches", icon: School, roles: ["ADMIN", "BGH"] },
     ]
@@ -69,7 +74,7 @@ const navData = [
   {
     title: "Nghiệp vụ",
     items: [
-      { label: "Phân công CM", href: "/dashboard/assignments", icon: Sparkles, roles: ["ADMIN", "BGH"] },
+      { label: "Phân công CM", href: "/dashboard/assignments", icon: Sparkles, actions: ["MANAGE_ASSIGNMENTS"] },
       { 
         label: "Thời Khóa Biểu", 
         href: "/dashboard/timetable", 
@@ -78,7 +83,8 @@ const navData = [
         subItems: [
           { label: "TKB THCS - Trường chính", href: "/dashboard/timetable/main-secondary", icon: Calendar, roles: ["ADMIN", "BGH", "GV"] },
           { label: "TKB THCS - Phân hiệu", href: "/dashboard/timetable/branch", icon: Calendar, roles: ["ADMIN", "BGH", "GV"] },
-          { label: "TKB Tiểu học", href: "/dashboard/timetable/primary", icon: Calendar, roles: ["ADMIN", "BGH", "GV"] },
+          { label: "TKB TH Nghinh Tường", href: "/dashboard/timetable/primary", icon: Calendar, roles: ["ADMIN", "BGH", "GV"] },
+          { label: "TKB Phân hiệu TH", href: "/dashboard/timetable/primary-branch", icon: Calendar, roles: ["ADMIN", "BGH", "GV"] },
         ]
       },
       { label: "Lịch Báo Giảng", href: "/dashboard/lbg", icon: ClipboardList, roles: ["ADMIN", "BGH", "GV"] },
@@ -88,7 +94,8 @@ const navData = [
     title: "Hệ thống",
     items: [
       { label: "Hồ sơ & Mật khẩu", href: "/dashboard/profile", icon: UserCog, roles: ["ADMIN", "BGH", "GV"] },
-      { label: "Cài đặt ứng dụng", href: "/dashboard/settings", icon: Settings, roles: ["ADMIN"] },
+      { label: "Cài đặt ứng dụng", href: "/dashboard/settings", icon: Settings, actions: ["MANAGE_SETTINGS"] },
+      { label: "Phân quyền", href: "/dashboard/settings/permissions", icon: Settings, roles: ["ADMIN"] },
     ]
   }
 ];
@@ -99,7 +106,7 @@ const ROLE_LABELS: Record<string, string> = {
   GV: "Giáo viên",
 };
 
-export default function Sidebar({ userRole, userName, userEmail, isCollapsed, onToggleCollapse }: SidebarProps) {
+export default function Sidebar({ userRole, userPermissions, userName, userEmail, isCollapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
@@ -114,6 +121,35 @@ export default function Sidebar({ userRole, userName, userEmail, isCollapsed, on
   const toggleMenu = (href: string) => {
     setExpandedMenus(prev => ({ ...prev, [href]: !prev[href] }));
   };
+
+  const [roleMappings, setRoleMappings] = useState<Record<string, string[]>>({});
+  
+  
+  useEffect(() => {
+    import("@/actions/config").then((m) => {
+      m.getRolePermissions().then(setRoleMappings);
+    });
+  }, []);
+
+  const effectiveActions = useMemo(() => {
+    const actions = new Set<string>();
+    if (roleMappings[userRole]) {
+      roleMappings[userRole].forEach(a => actions.add(a));
+    }
+    userPermissions.forEach(p => {
+      if (roleMappings[p]) {
+        roleMappings[p].forEach(a => actions.add(a));
+      }
+    });
+    return Array.from(actions);
+  }, [roleMappings, userRole, userPermissions]);
+
+  const hasAccess = useCallback((item: NavItem) => {
+    if (userRole === "ADMIN") return true;
+    if (item.roles && item.roles.includes(userRole)) return true;
+    if (item.actions && item.actions.some(a => effectiveActions.includes(a))) return true;
+    return false;
+  }, [userRole, effectiveActions]);
 
   return (
     <aside 
@@ -147,7 +183,7 @@ export default function Sidebar({ userRole, userName, userEmail, isCollapsed, on
       {/* Navigation Content */}
       <div className="flex-1 overflow-y-auto px-4 custom-scrollbar">
         {navData.map((section, idx) => {
-          const sectionItems = section.items.filter(item => item.roles.includes(userRole));
+          const sectionItems = section.items.filter(item => hasAccess(item));
           if (sectionItems.length === 0) return null;
 
           return (
@@ -254,7 +290,7 @@ export default function Sidebar({ userRole, userName, userEmail, isCollapsed, on
               Nông Dưỡng - AI
             </div>
             <div className="text-[10px] text-[#a0aec0]/70 font-medium mt-1">
-              &copy; 2026 TKB Pro Ver 1.3.5
+              &copy; 2026 TKB Pro Ver 1.3.7
             </div>
           </div>
         ) : (
