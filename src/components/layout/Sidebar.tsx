@@ -290,7 +290,7 @@ export default function Sidebar({ userRole, userPermissions, userName, userEmail
               Nông Dưỡng - AI
             </div>
             <div className="text-[10px] text-[#a0aec0]/70 font-medium mt-1">
-              &copy; 2026 TKB Pro Ver 1.3.7
+              &copy; 2026 TKB Pro Ver 1.3.8
             </div>
           </div>
         ) : (

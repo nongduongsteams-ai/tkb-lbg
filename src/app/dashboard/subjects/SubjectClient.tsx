@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, X, Check, BookOpen, Layers, Upload, Save, AlignLeft, Download, Settings2 } from "lucide-react";
+import { Plus, Edit2, Trash2, X, Check, BookOpen, Layers, Upload, Save, AlignLeft, Download, Settings2, Sparkles, Copy } from "lucide-react";
 import { createSubject, updateSubject, deleteSubject } from "@/actions/subject";
 import { getCurriculums, saveCurriculums } from "@/actions/curriculum";
 
@@ -20,6 +20,7 @@ export default function SubjectClient({
   const [subjects, setSubjects] = useState(initialSubjects);
   const [editingSubject, setEditingSubject] = useState<any>(null);
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
+  const [showPromptModal, setShowPromptModal] = useState(false);
   
   // ================= CURRICULUMS STATE =================
   const [selectedGradeFilter, setSelectedGradeFilter] = useState<string>("");
@@ -443,6 +444,13 @@ export default function SubjectClient({
                 >
                   <Download size={18} /> Tải File Mẫu
                 </a>
+                <button 
+                  onClick={() => setShowPromptModal(true)}
+                  className="bg-purple-600 text-white rounded-xl hover:bg-purple-700 text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors"
+                  style={{ padding: '10px 20px' }}
+                >
+                  <Sparkles size={18} /> Lấy Prompt AI
+                </button>
                 {canManagePPCT && (
                   <>
                     <label className="cursor-pointer bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors" style={{ padding: '10px 20px' }}>
@@ -553,6 +561,61 @@ export default function SubjectClient({
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL: AI PROMPT ===================== */}
+      {showPromptModal && selectedSubjectId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col" style={{ padding: '24px' }}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black text-gray-800 flex items-center gap-3">
+                <Sparkles className="text-purple-600 w-6 h-6" /> 
+                Prompt tạo PPCT bằng AI
+              </h3>
+              <button onClick={() => setShowPromptModal(false)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-4 font-medium">
+              Bạn có thể sao chép câu lệnh dưới đây và gửi cho ChatGPT, Claude hoặc Gemini để AI tự động tạo file Excel Phân phối chương trình chính xác nhất cho bạn.
+            </p>
+
+            <div className="relative">
+              <textarea 
+                readOnly
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-800 font-mono focus:outline-none focus:ring-2 focus:ring-purple-500/50 min-h-[160px] resize-none"
+                value={`Đóng vai là một chuyên gia giáo dục THCS. Tôi có đính kèm theo đây file Phụ lục 1 (hoặc Khung PPCT). Dựa vào dữ liệu trong file đính kèm, vui lòng lập Phân phối chương trình (PPCT) chi tiết cho môn học **${subjects.find(s => s.id === selectedSubjectId)?.name || 'đang chọn'}** dành cho khối **${subjects.find(s => s.id === selectedSubjectId)?.grade || 'đang chọn'}** theo chuẩn Chương trình GDPT 2018 mới nhất.
+
+Yêu cầu chi tiết:
+1. Kết quả bắt buộc phải là một bảng dữ liệu có đúng 4 cột: "STT", "Tiết PPCT", "Tên bài học", "Ghi chú".
+2. Vui lòng xuất bảng dữ liệu này thành một file **Excel (.xlsx)** để tôi có thể tải xuống và nhập trực tiếp vào phần mềm.
+
+Xin cảm ơn!`}
+              />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
+              <button
+                onClick={() => setShowPromptModal(false)}
+                className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors text-sm"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={() => {
+                  const subject = subjects.find(s => s.id === selectedSubjectId);
+                  const text = `Đóng vai là một chuyên gia giáo dục THCS. Tôi có đính kèm theo đây file Phụ lục 1 (hoặc Khung PPCT). Dựa vào dữ liệu trong file đính kèm, vui lòng lập Phân phối chương trình (PPCT) chi tiết cho môn học **${subject?.name || 'đang chọn'}** dành cho khối **${subject?.grade || 'đang chọn'}** theo chuẩn Chương trình GDPT 2018 mới nhất.\n\nYêu cầu chi tiết:\n1. Kết quả bắt buộc phải là một bảng dữ liệu có đúng 4 cột: "STT", "Tiết PPCT", "Tên bài học", "Ghi chú".\n2. Vui lòng xuất bảng dữ liệu này thành một file **Excel (.xlsx)** để tôi có thể tải xuống và nhập trực tiếp vào phần mềm.\n\nXin cảm ơn!`;
+                  navigator.clipboard.writeText(text);
+                  alert('Đã sao chép câu lệnh vào bộ nhớ tạm!');
+                }}
+                className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition-colors text-sm shadow-md flex items-center gap-2"
+              >
+                <Copy size={16} /> Sao chép Prompt
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@ import { Bell, LogOut, User, ChevronDown, Sparkles, Sliders } from "lucide-react
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import InstallPWA from "@/components/InstallPWA";
 
 interface TopBarProps {
   user: {
@@ -45,6 +46,8 @@ export default function TopBar({ user }: TopBarProps) {
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             <span className="text-[10px] font-bold text-green-600 tracking-wider">Neon DB Online</span>
           </div>
+
+          <InstallPWA />
 
           {/* Notification Bell */}
           <button className="relative p-2 rounded-xl text-slate-500 hover:text-[#1a1c23] hover:bg-slate-100 transition-colors group">
