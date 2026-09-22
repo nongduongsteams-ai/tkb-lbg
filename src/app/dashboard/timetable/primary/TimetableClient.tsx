@@ -445,8 +445,21 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
   const periodNumMap = useMemo(() => {
     const map = new Map<string, number>();
     const byAssignment = new Map<string, any[]>();
+    
+    const subSet = new Set<string>();
+    for (const s of activeLocalSlots) {
+      if (s.status === 'SUBSTITUTE' && s.assignment?.classId) {
+        subSet.add(----);
+      }
+    }
+
     for (const s of activeLocalSlots) {
       if (s.weekNumber === weekNumber) {
+        if (s.isOriginal && s.status !== 'SUBSTITUTE' && s.assignment?.classId) {
+          if (subSet.has(----)) {
+            continue;
+          }
+        }
         if (!byAssignment.has(s.assignmentId)) byAssignment.set(s.assignmentId, []);
         byAssignment.get(s.assignmentId)!.push(s);
       }
