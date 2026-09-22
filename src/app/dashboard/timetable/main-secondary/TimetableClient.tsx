@@ -79,6 +79,7 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
   const [showColorSettings, setShowColorSettings] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const [exportMode, setExportMode] = useState<'IDLE' | 'FULL' | 'CLEAN' | 'DETAIL'>('IDLE');
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('tkbColors');
@@ -116,6 +117,8 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
   };
 
   const handleDownloadExcel = async () => {
+    setIsExportingExcel(true);
+    setTimeout(async () => {
     try {
       const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
@@ -243,7 +246,10 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
     } catch (error) {
       console.error('Lỗi xuất Excel:', error);
       alert('Có lỗi xảy ra khi tạo Excel. Vui lòng thử lại.');
+    } finally {
+      setIsExportingExcel(false);
     }
+    }, 50);
   };
 const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
     setExportMode(mode);
@@ -255,6 +261,12 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
       try {
         const dataUrl = await toPng(tableRef.current, {
           backgroundColor: '#ffffff',
+          pixelRatio: 2,
+          skipFonts: true,
+          style: {
+            transform: 'scale(1)',
+            transformOrigin: 'top left'
+          }
         });
         const link = document.createElement('a');
         link.download = `TKB_Tuan_${weekNumber}${mode === 'CLEAN' ? '_TieuChuan' : mode === 'DETAIL' ? '_ChiTiet' : '_NangCao'}.png`;
@@ -2021,3 +2033,4 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
     </div>
   );
 }
+
