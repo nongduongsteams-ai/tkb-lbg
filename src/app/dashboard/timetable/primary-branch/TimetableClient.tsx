@@ -449,14 +449,14 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
     const subSet = new Set<string>();
     for (const s of activeLocalSlots) {
       if (s.status === 'SUBSTITUTE' && s.assignment?.classId) {
-        subSet.add(----);
+        subSet.add(`${s.weekNumber}-${s.dayOfWeek}-${s.session}-${s.period}-${s.assignment.classId}`);
       }
     }
 
     for (const s of activeLocalSlots) {
       if (s.weekNumber === weekNumber) {
         if (s.isOriginal && s.status !== 'SUBSTITUTE' && s.assignment?.classId) {
-          if (subSet.has(----)) {
+          if (subSet.has(`${s.weekNumber}-${s.dayOfWeek}-${s.session}-${s.period}-${s.assignment.classId}`)) {
             continue;
           }
         }
