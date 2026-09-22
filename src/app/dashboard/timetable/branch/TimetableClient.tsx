@@ -1330,10 +1330,10 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
           ref={scrollContainerRef}
           className={`w-full max-w-full overflow-auto flex-1 custom-scrollbar min-h-0 relative ${isDragging.current ? 'select-none' : ''}`} 
           style={{ maxHeight: isFullscreen ? 'none' : '80vh' }}
-          onMouseDown={handleMouseDown}
-          onMouseLeave={handleMouseLeave}
-          onMouseUp={handleMouseUp}
-          onMouseMove={handleMouseMove}
+          
+          
+          
+          
         >
           <div ref={tableRef} className="bg-white dark:bg-gray-800 min-w-max">
             <div className="text-center py-6 select-none border-x-2 border-t-2 border-slate-400 dark:border-slate-500 border-b-0 bg-white dark:bg-gray-800" style={{ color: 'inherit' }}>
