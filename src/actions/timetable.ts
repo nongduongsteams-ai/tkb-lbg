@@ -29,7 +29,7 @@ export async function getBranchTimetable(weekNumber: number, schoolYear: string,
       where: { schoolYear, classId: { in: classIds } },
       include: {
         teacher: { select: { id: true, name: true, shortName: true } },
-        subject: { select: { id: true, name: true, parentSubjectId: true, childSubjects: { select: { id: true } } } },
+        subject: { select: { id: true, name: true, shortName: true, parentSubjectId: true, childSubjects: { select: { id: true } } } },
         class: { select: { id: true, name: true } }
       }
     }),
@@ -854,9 +854,8 @@ export async function syncAssignmentPPCT(assignmentId: string, schoolYear: strin
       const isOverridden = overriddenSlotIds.has(slot.id);
 
       if (isOverridden) {
-        // Tiết bị lấp: Cập nhật bằng số tiết PPCT đã lên TRƯỚC ĐÓ gần nhất
-        // (tức là currentLessonNum - 1, vì currentLessonNum là số tiết sẽ dạy tiếp theo)
-        const lessonNumber = Math.max(1, currentLessonNum - 1);
+        // Tiết bị lấp: Cập nhật bằng số tiết PPCT đáng lẽ phải dạy
+        const lessonNumber = currentLessonNum;
         const curriculum = curriculums.find(c => c.lessonNumber === lessonNumber);
         const actualLessonName = curriculum?.lessonName || 'Chưa cập nhật tên bài';
         const curriculumId = curriculum?.id || null;

@@ -78,6 +78,7 @@ model SchoolPlan {
 model Subject {
   id              String   @id @default(cuid())
   name            String
+  shortName       String?  @map("short_name") // Tên cấu hình hiển thị trong TKB
   grade           Int
   color           String   @default("#6366f1") // Màu hiển thị trên TKB
   parentSubjectId String?  @map("parent_subject_id")

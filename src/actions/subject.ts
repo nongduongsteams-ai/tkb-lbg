@@ -131,7 +131,7 @@ export async function createSubject(data: { name: string; grade: number; color?:
   }
 }
 
-export async function updateSubject(id: string, data: { name: string; grade: number; color?: string; parentSubjectId?: string | null }) {
+export async function updateSubject(id: string, data: { name: string; grade: number; color?: string; parentSubjectId?: string | null; shortName?: string | null }) {
   try {
     const subject = await prisma.subject.update({
       where: { id },
@@ -139,7 +139,8 @@ export async function updateSubject(id: string, data: { name: string; grade: num
         name: data.name,
         grade: data.grade,
         color: data.color,
-        parentSubjectId: data.parentSubjectId || null
+        parentSubjectId: data.parentSubjectId || null,
+        shortName: data.shortName
       }
     });
     revalidatePath("/dashboard/subjects");

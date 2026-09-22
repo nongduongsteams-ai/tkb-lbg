@@ -34,7 +34,7 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
   const [pendingSubstitute, setPendingSubstitute] = useState<{
     day: number, period: number, session: 'SANG' | 'CHIEU', classId: string, assignmentId: string
   } | null>(null);
-  const [substituteType, setSubstituteType] = useState<'LAP_GIO' | 'DAY_THAY'>('DAY_THAY');
+  const [substituteType, setSubstituteType] = useState<'LAP_GIO' | 'DAY_THAY'>('LAP_GIO');
   const [substituteNote, setSubstituteNote] = useState('');
   const [customSubstituteName, setCustomSubstituteName] = useState('');
 
@@ -67,6 +67,16 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
   const [showPeriod5, setShowPeriod5] = useState(false);
   const [showPeriodNumber, setShowPeriodNumber] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const [useShortSubjectName, setUseShortSubjectName] = useState(true);
+  const [showTeacherName, setShowTeacherName] = useState(true);
+
+  useEffect(() => {
+    const savedShort = localStorage.getItem('tkbUseShortSubjectName');
+    if (savedShort !== null) setUseShortSubjectName(savedShort === 'true');
+    const savedTeacher = localStorage.getItem('tkbShowTeacherName');
+    if (savedTeacher !== null) setShowTeacherName(savedTeacher === 'true');
+  }, []);
 
   const [colors, setColors] = useState({
     subject: '#1e40af',
@@ -188,7 +198,7 @@ export default function TimetableClient({ weekNumber, schoolYear, schoolWeek, cl
                 const activeSlot = subSlot || normalSlot;
                 
                 if (activeSlot) {
-                   const subjectName = formatSubjectName(activeSlot.assignment.subject.name);
+                   const subjectName = formatSubjectName(activeSlot.assignment.subject);
                    const teacherName = activeSlot.assignment.teacher.shortName || activeSlot.assignment.teacher.name;
                    rowData.push(`${subjectName} - ${teacherName}`);
                 } else {
@@ -367,8 +377,11 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
   const periods = [1, 2, 3, 4];
   const sessions = ['SANG', 'CHIEU'];
 
-  const formatSubjectName = (name: string) => {
-    if (!name) return '';
+  const formatSubjectName = (subject: any) => {
+    if (!subject) return '';
+    if (subject.shortName) return subject.shortName;
+    if (!useShortSubjectName) return subject.name;
+    const name = subject.name;
     const map: Record<string, string> = {
       'Ngữ văn': 'Văn',
       'Ngoại ngữ 1': 'Anh',
@@ -1336,6 +1349,14 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
               <input type="checkbox" checked={showPeriodNumber} onChange={e => setShowPeriodNumber(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
               Hiện tiết PPCT
             </label>
+            <label className="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors">
+              <input type="checkbox" checked={useShortSubjectName} onChange={e => { setUseShortSubjectName(e.target.checked); localStorage.setItem('tkbUseShortSubjectName', String(e.target.checked)); }} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              Tên môn viết tắt
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors">
+              <input type="checkbox" checked={showTeacherName} onChange={e => { setShowTeacherName(e.target.checked); localStorage.setItem('tkbShowTeacherName', String(e.target.checked)); }} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              Hiện tên GV
+            </label>
           </div>
         </div>
 
@@ -1453,7 +1474,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                           .sort((a: any, b: any) => {
                             const nameA = a.teacher.name.split(' ').pop() || '';
                             const nameB = b.teacher.name.split(' ').pop() || '';
-                            if (nameA === nameB) return formatSubjectName(a.subject.name).localeCompare(formatSubjectName(b.subject.name), 'vi');
+                            if (nameA === nameB) return formatSubjectName(a.subject).localeCompare(formatSubjectName(b.subject), 'vi');
                             return nameA.localeCompare(nameB, 'vi');
                           });
                         
@@ -1496,12 +1517,16 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                               <div className="relative z-10 flex flex-col items-center justify-center w-full px-1 py-1 gap-0.5">
                                 <div className="flex items-center gap-1">
                                   <span className="font-bold text-sm" style={{ color: isOverridden ? colors.overridden : isDoubleBooked ? '#b91c1c' : (status === 'SUBSTITUTE' ? colors.substitute : colors.subject) }}>
-                                    {formatSubjectName(slot.assignment.subject.name)}
+                                    {formatSubjectName(slot.assignment.subject)}
                                   </span>
-                                  <span className="font-light opacity-60" style={{ color: isOverridden ? colors.overridden : '#9ca3af' }}>-</span>
-                                  <span style={{ color: isOverridden ? colors.overridden : isDoubleBooked ? '#b91c1c' : (status === 'SUBSTITUTE' ? colors.substitute : colors.teacher) }}>
-                                    {slot.assignment.teacher.shortName || slot.assignment.teacher.name.split(' ').pop()}
-                                  </span>
+                                  {showTeacherName && (
+                                    <>
+                                      <span className="font-light opacity-60" style={{ color: isOverridden ? colors.overridden : '#9ca3af' }}>-</span>
+                                      <span style={{ color: isOverridden ? colors.overridden : isDoubleBooked ? '#b91c1c' : (status === 'SUBSTITUTE' ? colors.substitute : colors.teacher) }}>
+                                        {slot.assignment.teacher.shortName || slot.assignment.teacher.name.split(' ').pop()}
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
                                 {(() => {
                                   const ts = slot.teachingSchedules?.[0];
@@ -1528,10 +1553,10 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                                   onMouseEnter={() => setHoveredItem({ type: 'subject', value: slot.assignment.subject.name })}
                                   onMouseLeave={() => setHoveredItem(null)}
                                   className="font-bold text-sm truncate hover:underline cursor-pointer"
-                                  title={formatSubjectName(slot.assignment.subject.name)}
+                                  title={formatSubjectName(slot.assignment.subject)}
                                   style={{ color: isOverridden ? colors.overridden : isDoubleBooked ? '#b91c1c' : (status === 'SUBSTITUTE' ? colors.substitute : colors.subject) }}
                                 >
-                                  {formatSubjectName(slot.assignment.subject.name)}
+                                  {formatSubjectName(slot.assignment.subject)}
                                   {showPeriodNumber && (() => {
                                     const ts = slot.teachingSchedules?.[0];
                                     const lessonNum = ts?.actualLessonNum || getPeriodNumInWeek(slot.id, slot.assignment.id);
@@ -1551,6 +1576,8 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                                     );
                                   })()}
                                 </span>
+                            {showTeacherName && (
+                              <>
                                 <span className="flex-shrink-0 font-light opacity-60" style={{ color: isOverridden ? colors.overridden : '#9ca3af' }}>-</span>
                                 <span
                                   onClick={() => toggleLockItem('teacher', slot.assignment.teacher.id)}
@@ -1562,7 +1589,9 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                                 >
                                   {slot.assignment.teacher.shortName || slot.assignment.teacher.name.split(' ').pop()}
                                 </span>
-                              </span>
+                              </>
+                            )}
+                          </span>
                             )}
                             {!isSaving && !isOverridden && !readOnly && (
                               <button
@@ -1633,7 +1662,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                                           <option value="" disabled></option>
                                           {clsAssignments.map((a: any) => (
                                             <option key={a.id} value={a.id}>
-                                              {formatSubjectName(a.subject.name)} ({a.teacher.name.split(' ').pop()})
+                                              {formatSubjectName(a.subject)} ({a.teacher.name.split(' ').pop()})
                                             </option>
                                           ))}
                                         </select>
@@ -1691,7 +1720,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                                       setPendingSubstitute({ day, period, session: session as 'SANG' | 'CHIEU', classId: cls.id, assignmentId: e.target.value });
                                       setSubstituteNote('');
                                       setCustomSubstituteName('');
-                                      setSubstituteType('DAY_THAY');
+                                      setSubstituteType('LAP_GIO');
                                       e.target.value = ''; 
                                     }
                                   }}
@@ -1702,7 +1731,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                                   <option value="CUSTOM" className="font-bold text-blue-600">-- Nhập tay --</option>
                                   {clsAssignments.map((a: any) => (
                                     <option key={a.id} value={a.id}>
-                                      {formatSubjectName(a.subject.name)} ({a.teacher.name.split(' ').pop()})
+                                      {formatSubjectName(a.subject)} ({a.teacher.name.split(' ').pop()})
                                     </option>
                                   ))}
                                 </select>
@@ -1794,7 +1823,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                     className={`group transition-colors ${isHighlighted ? 'bg-amber-200 dark:bg-amber-900/60' : idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-slate-100 dark:bg-gray-700/50'} hover:bg-amber-100 dark:hover:bg-amber-900/40`}
                   >
                     <td colSpan={3} className={`sticky left-0 z-20 font-bold border-2 border-slate-400 border-r-4 border-r-slate-500 dark:border-slate-500 dark:border-r-slate-400 py-3 px-3 text-right text-sm text-gray-800 dark:text-gray-200 transition-colors ${isHighlighted ? 'bg-amber-200 dark:bg-amber-900/60' : idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-slate-100 dark:bg-gray-700'} group-hover:bg-amber-100`}>
-                      {formatSubjectName(subjectName)}
+                      {subjectName}
                     </td>
                     {classes.map((cls: any) => {
                       const clsStat = derivedStats.find((s: any) => s.className === cls.name);
@@ -1949,20 +1978,6 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                   <input 
                     type="radio" 
                     name="subType"
-                    checked={substituteType === 'DAY_THAY'}
-                    onChange={() => setSubstituteType('DAY_THAY')}
-                    className="mt-1"
-                  />
-                  <div>
-                    <div className="font-bold text-gray-800 dark:text-gray-200">Dạy thay</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">Giáo viên gốc vẫn được tính tiết, người dạy thay được thêm vào.</div>
-                  </div>
-                </label>
-                
-                <label className="flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-700">
-                  <input 
-                    type="radio" 
-                    name="subType"
                     checked={substituteType === 'LAP_GIO'}
                     onChange={() => setSubstituteType('LAP_GIO')}
                     className="mt-1"
@@ -1970,6 +1985,20 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                   <div>
                     <div className="font-bold text-orange-600 dark:text-orange-400">Lấp giờ</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">Ghi đè hoàn toàn. Giáo viên gốc bị mất tiết này.</div>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-700">
+                  <input 
+                    type="radio" 
+                    name="subType"
+                    checked={substituteType === 'DAY_THAY'}
+                    onChange={() => setSubstituteType('DAY_THAY')}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="font-bold text-gray-800 dark:text-gray-200">Dạy thay</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Giáo viên gốc vẫn được tính tiết, người dạy thay được thêm vào.</div>
                   </div>
                 </label>
               </div>

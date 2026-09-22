@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { const count = await prisma.subject.count(); console.log('Total subjects: ', count); const subs = await prisma.subject.findMany({ select: { name: true, grade: true } }); console.log(subs.slice(0, 20)); } main().finally(()=>prisma.$disconnect());

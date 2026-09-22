@@ -565,6 +565,68 @@ export default function SubjectClient({
         </div>
       )}
 
+      {/* ===================== MODAL: EDIT SUBJECT ===================== */}
+      {isSubjectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">Cài đặt Môn học</h3>
+              <button onClick={() => setIsSubjectModalOpen(false)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!editingSubject) return;
+              setLoading(true);
+              const formData = new FormData(e.currentTarget);
+              const shortName = formData.get('shortName') as string;
+              
+              const res = await updateSubject(editingSubject.id, {
+                name: editingSubject.name,
+                grade: editingSubject.grade,
+                color: editingSubject.color,
+                shortName: shortName || null
+              });
+              
+              if (res.success) {
+                setSubjects(subjects.map(s => s.id === editingSubject.id ? { ...s, shortName: shortName || null } : s));
+                setIsSubjectModalOpen(false);
+              } else {
+                alert("Lỗi lưu môn học: " + res.error);
+              }
+              setLoading(false);
+            }}>
+              <div className="flex flex-col gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Tên môn học gốc (Đồng bộ)</label>
+                  <input type="text" readOnly value={editingSubject?.name || ''} className="w-full bg-gray-100 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-500 cursor-not-allowed" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Khối lớp</label>
+                  <input type="text" readOnly value={editingSubject?.grade || ''} className="w-full bg-gray-100 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-500 cursor-not-allowed" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Tên hiển thị TKB (Tùy chọn)</label>
+                  <input type="text" name="shortName" defaultValue={editingSubject?.shortName || ''} placeholder="VD: KHTN(Sinh), Toán..." className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <p className="text-xs text-gray-500 mt-1">Cài đặt tên môn sẽ hiển thị trên Thời khóa biểu thay vì tên gốc.</p>
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                <button type="button" onClick={() => setIsSubjectModalOpen(false)} className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors text-sm">
+                  Hủy
+                </button>
+                <button type="submit" disabled={loading} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors text-sm shadow-md disabled:opacity-50">
+                  {loading ? 'Đang lưu...' : 'Lưu cài đặt'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ===================== MODAL: AI PROMPT ===================== */}
       {showPromptModal && selectedSubjectId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">

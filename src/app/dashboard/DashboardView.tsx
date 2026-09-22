@@ -395,7 +395,7 @@ export default function DashboardView({ user, stats }: DashboardViewProps) {
                 { label: "2. Danh sách Giáo viên", done: stats.userCount > 0 },
                 { label: "3. Danh sách Lớp học", done: stats.classCount > 0 },
                 { label: "4. Phân công chuyên môn (AI)", done: stats.assignmentCount > 0 },
-                { label: `5. Upload PPCT các môn học (${stats.curriculumCount}/${stats.subjectCount} môn)`, done: stats.curriculumCount > 0 },
+                { label: `5. Upload PPCT các môn học (${stats.curriculumCount}/${stats.subjectCount} đầu môn (hoặc lớp))`, done: stats.curriculumCount > 0 },
                 { label: "6. Tiến hành chạy Xếp TKB", done: stats.latestWeek > 0 },
               ].map((step, idx) => (
                 <div
