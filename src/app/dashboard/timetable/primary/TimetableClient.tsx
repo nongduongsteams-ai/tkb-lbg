@@ -1965,7 +1965,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                           : `[LAP_GIO] ${customSubstituteName.trim()}${substituteNote.trim() ? ' - ' + substituteNote.trim() : ''}`;
                         handleSaveCellNote(day, period, session, classId, finalContent);
                       } else {
-                        handleAssign(day, period, session, classId, assignmentId, substituteType === 'LAP_GIO' ? 'NORMAL' : 'SUBSTITUTE');
+                        handleAssign(day, period, session, classId, assignmentId, 'SUBSTITUTE');
                         if (substituteNote.trim()) {
                           handleSaveCellNote(day, period, session, classId, substituteNote.trim());
                         }
@@ -1997,7 +1997,7 @@ const handleExportPNG = async (mode: 'FULL' | 'CLEAN' | 'DETAIL' = 'FULL') => {
                       : `[LAP_GIO] ${customSubstituteName.trim()}${substituteNote.trim() ? ' - ' + substituteNote.trim() : ''}`;
                     handleSaveCellNote(day, period, session, classId, finalContent);
                   } else {
-                    handleAssign(day, period, session, classId, assignmentId, substituteType === 'LAP_GIO' ? 'NORMAL' : 'SUBSTITUTE');
+                    handleAssign(day, period, session, classId, assignmentId, 'SUBSTITUTE');
                     if (substituteNote.trim()) {
                       handleSaveCellNote(day, period, session, classId, substituteNote.trim());
                     }
