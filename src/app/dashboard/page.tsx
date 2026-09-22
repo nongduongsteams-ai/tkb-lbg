@@ -32,7 +32,7 @@ export default async function DashboardPage() {
     }),
     prisma.schoolPlan.count({ where: { schoolYear: "2026-2027" } }),
     prisma.assignment.count({ where: { schoolYear: "2026-2027" } }),
-    prisma.curriculum.count()
+    prisma.curriculum.findMany({ distinct: ['subjectId'], select: { subjectId: true } }).then(res => res.length)
   ]);
 
   const latestWeek = latestTimetable?.weekNumber || 0;
