@@ -23,7 +23,13 @@ interface DashboardViewProps {
     userCount: number;
     classCount: number;
     subjectCount: number;
-    latestWeek?: number;
+    latestWeek: number;
+    planCount: number;
+    assignmentCount: number;
+    curriculumCount: number;
+    teacherClassCount: number;
+    teacherSubjectCount: number;
+    teacherPeriodCount: number;
   };
 }
 
@@ -60,10 +66,49 @@ export default function DashboardView({ user, stats }: DashboardViewProps) {
     },
     {
       label: "Tiến độ Xếp TKB",
-      value: "Tuần 1",
-      unit: "Học kỳ I",
+      value: stats.latestWeek > 0 ? `Tuần ${stats.latestWeek}` : "Chưa có",
+      unit: stats.latestWeek > 18 ? "Học kỳ II" : "Học kỳ I",
       icon: Calendar,
-      badge: "Đang khởi tạo",
+      badge: stats.latestWeek > 0 ? "Đã lên lịch" : "Đang khởi tạo",
+      glowColor: "glow-emerald",
+      iconBg: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30",
+    },
+  ];
+
+  const gvStatCards = [
+    {
+      label: "Tiết dạy trong tuần",
+      value: stats.teacherPeriodCount,
+      unit: "Tiết",
+      icon: Calendar,
+      badge: stats.latestWeek > 0 ? `Tuần ${stats.latestWeek}` : "Chưa có",
+      glowColor: "glow-indigo",
+      iconBg: "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30",
+    },
+    {
+      label: "Lớp phụ trách",
+      value: stats.teacherClassCount,
+      unit: "Lớp học",
+      icon: Users,
+      badge: "Giảng dạy",
+      glowColor: "glow-cyan",
+      iconBg: "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30",
+    },
+    {
+      label: "Môn giảng dạy",
+      value: stats.teacherSubjectCount,
+      unit: "Môn",
+      icon: BookOpen,
+      badge: "Đã phân công",
+      glowColor: "glow-purple",
+      iconBg: "bg-purple-500/20 text-purple-400 border border-purple-500/30",
+    },
+    {
+      label: "Trạng thái",
+      value: "Hoạt động",
+      unit: "",
+      icon: Activity,
+      badge: "Giáo viên",
       glowColor: "glow-emerald",
       iconBg: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30",
     },
@@ -136,6 +181,18 @@ export default function DashboardView({ user, stats }: DashboardViewProps) {
   ];
 
   const displayedMenus = isAdminOrBGH ? adminMenus : gvMenus;
+  const displayedStatCards = isAdminOrBGH ? statCards : gvStatCards;
+
+  const steps = [
+    stats.planCount > 0,
+    stats.userCount > 0,
+    stats.classCount > 0,
+    stats.assignmentCount > 0,
+    stats.curriculumCount > 0,
+    stats.latestWeek > 0,
+  ];
+  const completedSteps = steps.filter(Boolean).length;
+  const progressPercent = Math.round((completedSteps / steps.length) * 100);
 
   const firstName = user.name?.split(" ").slice(-1)[0] ?? "bạn";
 
@@ -149,7 +206,7 @@ export default function DashboardView({ user, stats }: DashboardViewProps) {
 
   const itemVariants = {
     hidden: { opacity: 0, y: 16 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } },
+    show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] as any } },
   };
 
   return (
@@ -223,46 +280,44 @@ export default function DashboardView({ user, stats }: DashboardViewProps) {
         </div>
       </motion.div>
 
-      {/* 4 Metric Cards (Only for ADMIN/BGH) */}
-      {isAdminOrBGH && (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
-        >
-          {statCards.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <motion.div
-                key={stat.label}
-                variants={itemVariants}
-                className="bg-white border border-[#e5e7eb] rounded-2xl relative overflow-hidden shadow-sm hover:shadow-md transition-shadow"
-                style={{ padding: '24px' }}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-semibold text-slate-500">{stat.label}</span>
-                  <div className={`p-2.5 rounded-xl ${stat.iconBg}`}>
-                    <Icon className="w-4.5 h-4.5 stroke-[2.2]" />
-                  </div>
+      {/* 4 Metric Cards */}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
+      >
+        {displayedStatCards.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <motion.div
+              key={stat.label}
+              variants={itemVariants}
+              className="bg-white border border-[#e5e7eb] rounded-2xl relative overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+              style={{ padding: '24px' }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-semibold text-slate-500">{stat.label}</span>
+                <div className={`p-2.5 rounded-xl ${stat.iconBg}`}>
+                  <Icon className="w-4.5 h-4.5 stroke-[2.2]" />
                 </div>
+              </div>
 
-                <div className="flex items-baseline gap-2 mt-2 pt-1 pb-2">
-                  <span className="text-4xl font-extrabold text-[#1a1c23] tracking-tight leading-tight">{stat.value}</span>
-                  <span className="text-sm font-medium text-slate-500">{stat.unit}</span>
-                </div>
+              <div className="flex items-baseline gap-2 mt-2 pt-1 pb-2">
+                <span className="text-4xl font-extrabold text-[#1a1c23] tracking-tight leading-tight">{stat.value}</span>
+                <span className="text-sm font-medium text-slate-500">{stat.unit}</span>
+              </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-slate-400">{stat.badge}</span>
-                  <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
-                    <Activity className="w-3 h-3" /> Hoạt động
-                  </span>
-                </div>
-              </motion.div>
-            );
-          })}
-        </motion.div>
-      )}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[11px] font-medium text-slate-400">{stat.badge}</span>
+                <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+                  <Activity className="w-3 h-3" /> Hoạt động
+                </span>
+              </div>
+            </motion.div>
+          );
+        })}
+      </motion.div>
 
       {/* Main 2-Column Section */}
       <motion.div
@@ -324,24 +379,24 @@ export default function DashboardView({ user, stats }: DashboardViewProps) {
                 <p className="text-xs font-medium text-slate-500 mt-0.5">Quy trình 6 bước xếp TKB</p>
               </div>
               <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
-                50% Hoàn thành
+                {progressPercent}% Hoàn thành
               </span>
             </div>
 
             {/* Progress Bar */}
             <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
-              <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 h-full w-1/2 rounded-full transition-all duration-500 shadow-md" />
+              <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 h-full rounded-full transition-all duration-500 shadow-md" style={{ width: `${progressPercent}%` }} />
             </div>
 
             {/* Checklist Step List */}
             <div className="space-y-3">
               {[
-                { label: "1. Kế hoạch nhà trường", done: stats.userCount > 1 },
-                { label: "2. Danh sách Giáo viên", done: stats.userCount > 1 },
+                { label: "1. Kế hoạch nhà trường", done: stats.planCount > 0 },
+                { label: "2. Danh sách Giáo viên", done: stats.userCount > 0 },
                 { label: "3. Danh sách Lớp học", done: stats.classCount > 0 },
-                { label: "4. Phân công chuyên môn (AI)", done: false },
-                { label: "5. Upload PPCT các môn học", done: false },
-                { label: "6. Tiến hành chạy Xếp TKB", done: false },
+                { label: "4. Phân công chuyên môn (AI)", done: stats.assignmentCount > 0 },
+                { label: "5. Upload PPCT các môn học", done: stats.curriculumCount > 0 },
+                { label: "6. Tiến hành chạy Xếp TKB", done: stats.latestWeek > 0 },
               ].map((step, idx) => (
                 <div
                   key={idx}
